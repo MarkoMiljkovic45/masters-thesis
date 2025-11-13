@@ -1,147 +1,110 @@
 import torch
-import numpy as np
-import pandas as pd
-from scipy import stats
 from torch.utils.data import Dataset
 
-class LogReturnsDataset(Dataset):
-    """
-    Dataset representing log returns
-    TODO
-    """
-    
-    def __init__(self, data_file: str):
-        """
-        TODO
-        """
-        start_date = '1994-01-01'
-        end_date = '2014-06-01'
-        
-        cols, parse_dates = ['permno', 'ret', 'date'], ['date']
-        dtypes = {
-            'permno': np.uint32,
-            'ret': np.float32
-        }
-        
-        raw_data = pd.read_csv(data_file, usecols=cols, dtype=dtypes, parse_dates=parse_dates)
-        raw_data = raw_data.pivot(index='date', columns='permno', values='ret')
-        raw_data = raw_data[start_date:end_date].dropna(axis='columns')
-        EWM = raw_data.sum(axis=1) / len(raw_data)
-        
-        r = np.array(np.log(raw_data + 1))
-        ewm = np.array(np.log(1 + EWM))
-        
-        self.r = torch.tensor(r, dtype=torch.float32)
-        self.ewm = torch.tensor(ewm, dtype=torch.float32)
-
-    def __len__(self):
-        len(self.r)
-
-    def __getitem__(self, idx):
-        return self.r[idx]
-
-    def get_synthetic_data(self, r_market, n_stock: int = 10):
-        """
-        Generate simple synthetic log returns based on single factor model (OLS) and market log returns
-        
-        Args:
-            r_market - Required : Log market returns for the period (Array of length t)
-            n_stock  - Optional : Number of stocks to generate
-        
-        Returns:
-            s_r     - Synthetic returns
-            s_alpha - Synthetic alpha
-            s_beta  - Synthetic beta
-            s_res   - Synthetic residuals
-        """
-        r   = self.r.numpy()
-        ewm = self.ewm.numpy()
-
-        # Fit
-        ols = [stats.linregress(ewm, r[:, j]) for j in range(len(r.T))]
-        alpha = np.array([ols_i.intercept for ols_i in ols])
-        beta = np.array([ols_i.slope for ols_i in ols])
-    
-        residuals = r - (np.reshape(ewm, (len(ewm), 1)) @ np.reshape(beta, (1, len(beta))) + alpha)
-    
-        mu_res = 0                     # Residual mean is 0, so we only need residual variance
-        sigma_res = np.std(residuals)  # Residual variance is specific for a stock so we will generate it using the normal distribution
-        
-        mu_sigma_res = np.mean(sigma_res)
-        sigma_sigma_res = np.std(sigma_res)
-        
-        mu_a, sigma_a = np.mean(alpha), np.std(alpha)
-        mu_b, sigma_b = np.mean(beta),  np.std(beta)
-
-        t = len(r_market)
-
-        # Generate
-        s_alpha = np.random.normal(mu_a, sigma_a, n_stock)
-        s_beta = np.random.normal(mu_b, sigma_b, n_stock)
-        
-        s_sigma_res = np.abs(np.random.normal(mu_sigma_res, sigma_sigma_res, n_stock)) # TODO Maybe use gamma distribution here
-        s_res = np.array([np.random.normal(0, s_sigma_res_i, t) for s_sigma_res_i in s_sigma_res]).T
-    
-        # TODO Market lenght could be probelm, generate market data
-        s_r = s_alpha + np.reshape(r_market, (len(r_market), 1)) @ np.reshape(s_beta, (1, len(s_beta))) + s_res
-    
-        return torch.tensor(s_r, dtype=torch.float32), s_alpha, s_beta, s_res
-
-
 class SyntheticLogReturnsDataset(Dataset):
-    """Generates synthetic log returns using a factor model with market exposure and idiosyncratic risk."""
-    
-    def __init__(self, n_stocks, t, window=1, seed=None):
-        """
-        Args:
-            n_stocks: Number of stocks
-            t: Number of time steps
-            window: Size of historical window (1 = no windowing)
-            seed: Random seed for reproducibility
-        """
-        if seed is not None:
-            torch.manual_seed(seed)
-            
-        self.n_stocks = n_stocks
+    def __init__(self, n_stock=None, t=None, window=None, distribution='normal', include_market=False, seed=42):
+        self.n_stock = n_stock
         self.t = t
         self.window = window
+        self.distribution = distribution
+        self.include_market = include_market
+        self.seed = seed
         
-        # Generate market returns (broader volatility)
-        self.r_market = torch.randn(t + window - 1) * 0.015
+        if n_stock is not None and t is not None and window is not None:
+            self._generate_data()
+    
+    def _generate_data(self):
+        torch.manual_seed(self.seed)
         
-        # Generate stock characteristics
-        # Alpha: excess returns, typically small (can be positive or negative)
-        self.alpha = torch.randn(n_stocks) * 0.002
+        t_total = self.t + self.window - 1
+        # SPY 20-year mean = 0.0003
+        # SPY 20-year std  = 0.0122
+        self.r_market = self._generate_returns(t_total, self.distribution, mean=0.0003, std=0.0122)
+        self.alphas = torch.randn(self.n_stock) * 0.005
+        self.betas = torch.randn(self.n_stock) * 0.3 + 1.0
+        self.idio_vols = torch.rand(self.n_stock) * 0.015 + 0.005
         
-        # Beta: market sensitivity, typically around 1.0 with some variation
-        self.beta = torch.randn(n_stocks) * 0.3 + 1.0
+        r_systematic = self.alphas.unsqueeze(1) + self.betas.unsqueeze(1) * self.r_market.unsqueeze(0)
+        idio_noise = self._generate_returns((self.n_stock, t_total), self.distribution)
+        idio_noise = idio_noise * self.idio_vols.unsqueeze(1)
+        self.returns = r_systematic + idio_noise
         
-        # Idiosyncratic volatility: varies by stock (between 0.5% and 2%)
-        idio_vol = torch.rand(n_stocks) * 0.015 + 0.005
+        self._precompute_windows()
+    
+    def _generate_returns(self, shape, distribution, mean=0.0, std=1.0):
+        if distribution == 'normal':
+            return torch.randn(shape) * std + mean
+        elif distribution == 't':
+            dist = torch.distributions.studentT.StudentT(df=5.0)
+            samples = dist.sample(shape if isinstance(shape, tuple) else (shape,))
+            return samples * std / (5/3)**0.5 + mean
+        else:
+            raise ValueError(f"Unknown distribution: {distribution}")
+    
+    def _precompute_windows(self):
+        windows = []
+        for i in range(self.t):
+            stock_windows = []
+            for stock_idx in range(self.n_stock):
+                stock_window = self.returns[stock_idx, i:i+self.window]
+                stock_windows.append(stock_window)
+            
+            stock_data = torch.cat(stock_windows)
+            
+            if self.include_market:
+                market_window = self.r_market[i:i+self.window]
+                window_data = torch.cat([stock_data, market_window])
+            else:
+                window_data = stock_data
+            
+            windows.append(window_data)
         
-        # Generate returns: r = alpha + beta * r_market + idiosyncratic noise
-        # Broadcasting: (t, 1) for market, (1, n_stocks) for alpha/beta
-        systematic = self.alpha.unsqueeze(0) + self.beta.unsqueeze(0) * self.r_market.unsqueeze(1)
-        
-        # Add stock-specific noise with varying volatility
-        self.idio_noise = torch.randn(t + window - 1, n_stocks) * idio_vol.unsqueeze(0)
-
-        self.returns = systematic + self.idio_noise
-
-        # Pre-compute windowed data for efficient slicing
-        if self.window > 1:
-            self.windowed_returns = torch.stack([
-                self.returns[i:i + self.window].T 
-                for i in range(self.t)
-            ])
-        
+        self.windowed_data = torch.stack(windows)
+    
     def __len__(self):
         return self.t
     
     def __getitem__(self, idx):
-        if self.window == 1:
-            # Shape: (n_stocks,)
-            return self.returns[idx]
+        if isinstance(idx, slice):
+            indices = range(*idx.indices(len(self)))
+            X = self.windowed_data[list(indices)]
         else:
-            # Shape: (n_stocks, window)
-            return self.windowed_returns[idx]
+            X = self.windowed_data[idx]
+
+        start = window - 1
+        end   = -window
+        step  = window
+        
+        y = X[start:end:step]
+        
+        r_market = X[-1]
+
+        return X, y, r_market
+    
+    def partition_stocks(self, n_partitions):
+        """Partition dataset into subsets by stock while sharing the same market returns."""
+        stocks_per_partition = self.n_stock // n_partitions
+        partitions = []
+        
+        for i in range(n_partitions):
+            start_stock = i * stocks_per_partition
+            end_stock = start_stock + stocks_per_partition if i < n_partitions - 1 else self.n_stock
+            
+            partition = SyntheticLogReturnsDataset()
+            partition.n_stock = end_stock - start_stock
+            partition.t = self.t
+            partition.window = self.window
+            partition.distribution = self.distribution
+            partition.include_market = self.include_market
+            partition.seed = self.seed
+            
+            partition.r_market = self.r_market
+            partition.alphas = self.alphas[start_stock:end_stock]
+            partition.betas = self.betas[start_stock:end_stock]
+            partition.idio_vols = self.idio_vols[start_stock:end_stock]
+            partition.returns = self.returns[start_stock:end_stock]
+            
+            partition._precompute_windows()
+            partitions.append(partition)
+        
+        return partitions
