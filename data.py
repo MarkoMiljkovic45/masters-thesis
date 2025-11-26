@@ -2,109 +2,159 @@ import torch
 from torch.utils.data import Dataset
 
 class SyntheticLogReturnsDataset(Dataset):
-    def __init__(self, n_stock=None, t=None, window=None, distribution='normal', include_market=False, seed=42):
+    def __init__(self, n_stock, t, window, distribution='normal', 
+                 overlapping_windows=False, task='reconstruction', seed=42):
+        """
+        Synthetic log returns dataset for financial modeling.
+        
+        Args:
+            n_stock: Number of stocks
+            t: Number of time windows
+            window: Window size (lookback period)
+            distribution: 'normal' or 't' (Student's t)
+            overlapping_windows: If False, windows don't overlap. If True, they do.
+            task: 'reconstruction' or 'prediction'
+            seed: Random seed for reproducibility
+        """
         self.n_stock = n_stock
         self.t = t
         self.window = window
         self.distribution = distribution
-        self.include_market = include_market
+        self.overlapping_windows = overlapping_windows
+        self.task = task
         self.seed = seed
         
-        if n_stock is not None and t is not None and window is not None:
-            self._generate_data()
+        self._generate_data()
     
     def _generate_data(self):
+        """Generate synthetic returns data with market factor structure."""
         torch.manual_seed(self.seed)
         
-        t_total = self.t + self.window - 1
-        # SPY 20-year mean = 0.0003
-        # SPY 20-year std  = 0.0122
-        self.r_market = self._generate_returns(t_total, self.distribution, mean=0.0003, std=0.0122)
+        # Calculate total time points needed
+        if self.overlapping_windows:
+            t_total = self.t + self.window - 1
+        else:
+            t_total = self.t * self.window
+        
+        # Add extra point for prediction task
+        if self.task == 'prediction':
+            t_total += 1
+        
+        # Generate market returns (SPY 20-year statistics: mean=0.0003, std=0.0122)
+        self.r_market = self._sample_distribution(t_total, mean=0.0003, std=0.0122)
+        
+        # Generate stock-specific parameters
         self.alphas = torch.randn(self.n_stock) * 0.005
         self.betas = torch.randn(self.n_stock) * 0.3 + 1.0
         self.idio_vols = torch.rand(self.n_stock) * 0.015 + 0.005
         
-        r_systematic = self.alphas.unsqueeze(1) + self.betas.unsqueeze(1) * self.r_market.unsqueeze(0)
-        idio_noise = self._generate_returns((self.n_stock, t_total), self.distribution)
-        idio_noise = idio_noise * self.idio_vols.unsqueeze(1)
-        self.returns = r_systematic + idio_noise
-        
-        self._precompute_windows()
+        # Generate stock returns: r_i,t = alpha_i + beta_i * r_market,t + epsilon_i,t
+        systematic = self.alphas.unsqueeze(1) + self.betas.unsqueeze(1) * self.r_market.unsqueeze(0)
+        idiosyncratic = self._sample_distribution((self.n_stock, t_total)) * self.idio_vols.unsqueeze(1)
+        self.returns = systematic + idiosyncratic  # Shape: (n_stock, t_total)
     
-    def _generate_returns(self, shape, distribution, mean=0.0, std=1.0):
-        if distribution == 'normal':
+    def _sample_distribution(self, shape, mean=0.0, std=1.0):
+        """Sample from specified distribution."""
+        if self.distribution == 'normal':
             return torch.randn(shape) * std + mean
-        elif distribution == 't':
-            dist = torch.distributions.studentT.StudentT(df=5.0)
+        elif self.distribution == 't':
+            df = 5.0
+            dist = torch.distributions.studentT.StudentT(df=df)
             samples = dist.sample(shape if isinstance(shape, tuple) else (shape,))
-            return samples * std / (5/3)**0.5 + mean
+            # Adjust for Student's t variance: Var(T_df) = df/(df-2) for df > 2
+            scale_factor = (df / (df - 2)) ** 0.5
+            return samples * (std / scale_factor) + mean
         else:
             raise ValueError(f"Unknown distribution: {distribution}")
     
-    def _precompute_windows(self):
-        windows = []
-        for i in range(self.t):
-            stock_windows = []
-            for stock_idx in range(self.n_stock):
-                stock_window = self.returns[stock_idx, i:i+self.window]
-                stock_windows.append(stock_window)
-            
-            stock_data = torch.cat(stock_windows)
-            
-            if self.include_market:
-                market_window = self.r_market[i:i+self.window]
-                window_data = torch.cat([stock_data, market_window])
-            else:
-                window_data = stock_data
-            
-            windows.append(window_data)
-        
-        self.windowed_data = torch.stack(windows)
-    
     def __len__(self):
-        return self.t
+        """Total number of samples: n_stock * t windows."""
+        return self.n_stock * self.t
     
     def __getitem__(self, idx):
-        if isinstance(idx, slice):
-            indices = range(*idx.indices(len(self)))
-            X = self.windowed_data[list(indices)]
+        """
+        Get a single stock-window sample.
+        
+        Returns dict with keys: 'stock_returns', 'r_market', 'target'
+        For prediction task, also includes 'r_market_next'
+        """
+        # Decode flat index into stock and window indices
+        stock_idx = idx % self.n_stock
+        window_idx = idx // self.n_stock
+        
+        # Calculate time range for this window
+        if self.overlapping_windows:
+            start_t = window_idx
+            end_t = window_idx + self.window
         else:
-            X = self.windowed_data[idx]
-
-        start = window - 1
-        end   = -window
-        step  = window
+            start_t = window_idx * self.window
+            end_t = (window_idx + 1) * self.window
         
-        y = X[start:end:step]
+        # Extract stock returns and market returns for window
+        stock_returns = self.returns[stock_idx, start_t:end_t]
+        r_market = self.r_market[start_t:end_t]
         
-        r_market = X[-1]
+        if self.task == 'reconstruction':
+            return {
+                'stock_returns': stock_returns,
+                'r_market': r_market,
+                'target': stock_returns  # Reconstruct the input
+            }
+        else:  # prediction
+            next_return = self.returns[stock_idx, end_t]
+            r_market_next = self.r_market[end_t]
+            
+            return {
+                'stock_returns': stock_returns,
+                'r_market': r_market,
+                'r_market_next': r_market_next,
+                'target': next_return
+            }
 
-        return X, y, r_market
+def generate_datasets(config):
+    seed_start = config['SEED']
+    seed_end   = seed_start + config['N_DATASET_TRAIN']
     
-    def partition_stocks(self, n_partitions):
-        """Partition dataset into subsets by stock while sharing the same market returns."""
-        stocks_per_partition = self.n_stock // n_partitions
-        partitions = []
-        
-        for i in range(n_partitions):
-            start_stock = i * stocks_per_partition
-            end_stock = start_stock + stocks_per_partition if i < n_partitions - 1 else self.n_stock
-            
-            partition = SyntheticLogReturnsDataset()
-            partition.n_stock = end_stock - start_stock
-            partition.t = self.t
-            partition.window = self.window
-            partition.distribution = self.distribution
-            partition.include_market = self.include_market
-            partition.seed = self.seed
-            
-            partition.r_market = self.r_market
-            partition.alphas = self.alphas[start_stock:end_stock]
-            partition.betas = self.betas[start_stock:end_stock]
-            partition.idio_vols = self.idio_vols[start_stock:end_stock]
-            partition.returns = self.returns[start_stock:end_stock]
-            
-            partition._precompute_windows()
-            partitions.append(partition)
-        
-        return partitions
+    train_datasets = [
+        SyntheticLogReturnsDataset(
+            n_stock        = config['N_STOCK'],
+            t              = config['T'],
+            window         = config['WINDOW'],
+            distribution   = config['DISTRIBUTION'],
+            task           = config['TASK'],
+            overlapping_windows=False,
+            seed           = seed
+        ) for seed in range(seed_start, seed_end)
+    ]
+    
+    seed_start = seed_end
+    seed_end   = seed_start + config['N_DATASET_VAL']
+    
+    val_datasets = [
+        SyntheticLogReturnsDataset(
+            n_stock        = config['N_STOCK'],
+            t              = config['T'],
+            window         = config['WINDOW'],
+            distribution   = config['DISTRIBUTION'],
+            task           = config['TASK'],
+            overlapping_windows=False,
+            seed           = seed
+        ) for seed in range(seed_start, seed_end)
+    ]
+    
+    seed_start = seed_end
+    seed_end   = seed_start + config['N_DATASET_TEST']
+    
+    test_datasets = [
+        SyntheticLogReturnsDataset(
+            n_stock        = config['N_STOCK'],
+            t              = config['T'],
+            window         = config['WINDOW'],
+            distribution   = config['DISTRIBUTION'],
+            task           = config['TASK'],
+            overlapping_windows=False,
+            seed           = seed
+        ) for seed in range(seed_start, seed_end)
+    ]
+
+    return train_datasets, val_datasets, test_datasets
