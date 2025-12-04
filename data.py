@@ -1,27 +1,45 @@
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, ConcatDataset
+from typing import List, Tuple
+
 
 class SyntheticLogReturnsDataset(Dataset):
-    def __init__(self, n_stock, t, window, distribution='normal', 
-                 overlapping_windows=False, task='reconstruction', seed=42):
+    """
+    Synthetic log returns dataset with flexible lookback and target windows.
+    
+    Supports both reconstruction (target = context period) and prediction (target = future period).
+    """
+    
+    def __init__(
+        self, 
+        n_stock: int,
+        n_windows: int,
+        lookback_window: int,
+        target_window: int,
+        distribution: str = 'normal',
+        overlapping_windows: bool = False,
+        predict_future: bool = False,
+        seed: int = 42
+    ):
         """
-        Synthetic log returns dataset for financial modeling.
-        
         Args:
-            n_stock: Number of stocks
-            t: Number of time windows
-            window: Window size (lookback period)
-            distribution: 'normal' or 't' (Student's t)
+            n_stock: Number of stocks to generate
+            n_windows: Number of windows to create per stock
+            lookback_window: Size of historical context window (for LSTM input)
+            target_window: Size of target window (for output)
+            distribution: 'normal' or 't' (Student's t-distribution)
             overlapping_windows: If False, windows don't overlap. If True, they do.
-            task: 'reconstruction' or 'prediction'
+            predict_future: If False (reconstruction), target overlaps with context.
+                            If True (prediction), target comes after context.
             seed: Random seed for reproducibility
         """
         self.n_stock = n_stock
-        self.t = t
-        self.window = window
+        self.n_windows = n_windows
+        self.lookback_window = lookback_window
+        self.target_window = target_window
         self.distribution = distribution
         self.overlapping_windows = overlapping_windows
-        self.task = task
+        self.predict_future = predict_future
         self.seed = seed
         
         self._generate_data()
@@ -32,13 +50,20 @@ class SyntheticLogReturnsDataset(Dataset):
         
         # Calculate total time points needed
         if self.overlapping_windows:
-            t_total = self.t + self.window - 1
+            context_points = self.lookback_window + (self.n_windows - 1)
         else:
-            t_total = self.t * self.window
+            context_points = self.n_windows * self.lookback_window
         
-        # Add extra point for prediction task
-        if self.task == 'prediction':
-            t_total += 1
+        # Add target window points
+        if self.predict_future:
+            if self.overlapping_windows:
+                target_points = self.target_window
+            else:
+                target_points = self.n_windows * self.target_window
+        else:
+            target_points = 0
+        
+        t_total = context_points + target_points
         
         # Generate market returns (SPY 20-year statistics: mean=0.0003, std=0.0122)
         self.r_market = self._sample_distribution(t_total, mean=0.0003, std=0.0122)
@@ -65,96 +90,81 @@ class SyntheticLogReturnsDataset(Dataset):
             scale_factor = (df / (df - 2)) ** 0.5
             return samples * (std / scale_factor) + mean
         else:
-            raise ValueError(f"Unknown distribution: {distribution}")
+            raise ValueError(f"Unknown distribution: {self.distribution}")
     
     def __len__(self):
-        """Total number of samples: n_stock * t windows."""
-        return self.n_stock * self.t
+        """Total number of samples: n_stock * n_windows."""
+        return self.n_stock * self.n_windows
     
     def __getitem__(self, idx):
         """
         Get a single stock-window sample.
         
-        Returns dict with keys: 'stock_returns', 'r_market', 'target'
-        For prediction task, also includes 'r_market_next'
+        Returns dict with keys:
+            - 'stock_returns_context': Historical stock returns
+            - 'r_market_context': Historical market returns for LSTM input
+            - 'r_market_target': Market returns for output calculation
+            - 'target': Target stock returns to predict/reconstruct
         """
         # Decode flat index into stock and window indices
         stock_idx = idx % self.n_stock
         window_idx = idx // self.n_stock
         
-        # Calculate time range for this window
+        # Calculate time range for lookback (context) window
         if self.overlapping_windows:
-            start_t = window_idx
-            end_t = window_idx + self.window
+            context_start = window_idx
+            context_end = window_idx + self.lookback_window
         else:
-            start_t = window_idx * self.window
-            end_t = (window_idx + 1) * self.window
+            context_start = window_idx * self.lookback_window
+            context_end = (window_idx + 1) * self.lookback_window
         
-        # Extract stock returns and market returns for window
-        stock_returns = self.returns[stock_idx, start_t:end_t]
-        r_market = self.r_market[start_t:end_t]
+        # Calculate time range for target window
+        if self.predict_future:
+            # Target comes after context
+            target_start = context_end
+            target_end = target_start + self.target_window
+        else:
+            # Reconstruction: target is same as context
+            target_start = context_start
+            target_end = context_end
         
-        if self.task == 'reconstruction':
-            return {
-                'stock_returns': stock_returns,
-                'r_market': r_market,
-                'target': stock_returns  # Reconstruct the input
-            }
-        else:  # prediction
-            next_return = self.returns[stock_idx, end_t]
-            r_market_next = self.r_market[end_t]
-            
-            return {
-                'stock_returns': stock_returns,
-                'r_market': r_market,
-                'r_market_next': r_market_next,
-                'target': next_return
-            }
+        # Extract data
+        stock_returns_context = self.returns[stock_idx, context_start:context_end]
+        r_market_context = self.r_market[context_start:context_end]
+        r_market_target = self.r_market[target_start:target_end]
+        target = self.returns[stock_idx, target_start:target_end]
+        
+        return {
+            'stock_returns_context': stock_returns_context,
+            'r_market_context': r_market_context,
+            'r_market_target': r_market_target,
+            'target': target
+        }
+
 
 def generate_datasets(config):
     seed_start = config['SEED']
-    seed_end   = seed_start + config['N_DATASET_TRAIN']
-    
-    train_datasets = [
+    seed_end   = seed_start + config['N_DATASET_TRAIN'] + config['N_DATASET_VAL'] + config['N_DATASET_TEST']
+
+    datasets = [
         SyntheticLogReturnsDataset(
-            n_stock        = config['N_STOCK'],
-            t              = config['T'],
-            window         = config['WINDOW'],
-            distribution   = config['DISTRIBUTION'],
-            task           = config['TASK'],
-            overlapping_windows=False,
-            seed           = seed
+            n_stock             = config['N_STOCK'],
+            n_windows           = config['N_WINDOWS'],
+            lookback_window     = config['LOOKBACK_WINDOW'],
+            target_window       = config['TARGET_WINDOW'],
+            distribution        = config['DISTRIBUTION'],
+            predict_future      = config['TASK'] == 'prediction',
+            overlapping_windows = config['OVERLAPPING_WINDOWS'],
+            seed                = seed
         ) for seed in range(seed_start, seed_end)
     ]
+
+    i = config['N_DATASET_TRAIN']
+    j = i + config['N_DATASET_VAL']
+    k = j + config['N_DATASET_TEST']
     
-    seed_start = seed_end
-    seed_end   = seed_start + config['N_DATASET_VAL']
-    
-    val_datasets = [
-        SyntheticLogReturnsDataset(
-            n_stock        = config['N_STOCK'],
-            t              = config['T'],
-            window         = config['WINDOW'],
-            distribution   = config['DISTRIBUTION'],
-            task           = config['TASK'],
-            overlapping_windows=False,
-            seed           = seed
-        ) for seed in range(seed_start, seed_end)
-    ]
-    
-    seed_start = seed_end
-    seed_end   = seed_start + config['N_DATASET_TEST']
-    
-    test_datasets = [
-        SyntheticLogReturnsDataset(
-            n_stock        = config['N_STOCK'],
-            t              = config['T'],
-            window         = config['WINDOW'],
-            distribution   = config['DISTRIBUTION'],
-            task           = config['TASK'],
-            overlapping_windows=False,
-            seed           = seed
-        ) for seed in range(seed_start, seed_end)
-    ]
+    train_datasets = datasets[0:i]
+    val_datasets   = datasets[i:j]
+    test_datasets  = datasets[j:k]
 
     return train_datasets, val_datasets, test_datasets

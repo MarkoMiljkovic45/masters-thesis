@@ -1,24 +1,27 @@
 import torch
 import torch.nn as nn
-from typing import Tuple, Optional
+from typing import Tuple
+import lightning.pytorch as pl
+
 
 class FinancialLSTM(nn.Module):
+    """
+    Task-agnostic LSTM that estimates alpha and beta from historical data,
+    then applies them to any target market return sequence.
+    """
     
     def __init__(
         self, 
-        window: int,
         hidden_size: int = 64,
         num_layers: int = 2,
-        dropout: float = 0.2,
-        task: str = 'reconstruction'
+        dropout: float = 0.2
     ):
         super(FinancialLSTM, self).__init__()
         
-        self.window = window
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.task = task
         
+        # LSTM processes historical data (stock returns, market returns, interaction)
         self.lstm = nn.LSTM(
             input_size=3,
             hidden_size=hidden_size,
@@ -27,80 +30,101 @@ class FinancialLSTM(nn.Module):
             batch_first=True
         )
         
+        # Heads to estimate alpha and beta
         self.alpha_head = nn.Linear(hidden_size, 1)
         self.beta_head = nn.Linear(hidden_size, 1)
     
     def forward(
         self,
-        stock_returns: torch.Tensor,
-        r_market: torch.Tensor,
-        r_market_next: Optional[torch.Tensor] = None
+        stock_returns_context: torch.Tensor,    # (batch, lookback_window)
+        r_market_context: torch.Tensor,         # (batch, lookback_window)
+        r_market_target: torch.Tensor           # (batch, target_window)
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         
-        interaction = stock_returns * r_market
-        lstm_input = torch.stack([stock_returns, r_market, interaction], dim=-1)
+        interaction = stock_returns_context * r_market_context
+        lstm_input = torch.stack([stock_returns_context, r_market_context, interaction], dim=-1)
         
+
         lstm_out, _ = self.lstm(lstm_input)
         final_hidden = lstm_out[:, -1, :]
         
-        alpha = self.alpha_head(final_hidden).squeeze(-1)
-        beta = self.beta_head(final_hidden).squeeze(-1)
+        alpha = self.alpha_head(final_hidden).squeeze(-1)  # (batch,)
+        beta = self.beta_head(final_hidden).squeeze(-1)    # (batch,)
         
-        if self.task == 'reconstruction':
-            reconstruction = alpha.unsqueeze(-1) + beta.unsqueeze(-1) * r_market
-        else:
-            if r_market_next is None:
-                raise ValueError("r_market_next required for prediction task")
-            reconstruction = alpha + beta * r_market_next.squeeze(-1)
+        predictions = alpha.unsqueeze(-1) + beta.unsqueeze(-1) * r_market_target
         
-        return reconstruction, alpha, beta
+        return predictions, alpha, beta
 
-
-import lightning.pytorch as pl
 
 class FinancialLSTMModule(pl.LightningModule):
+    """
+    PyTorch Lightning wrapper for FinancialLSTM.
+    Task-agnostic: handles both reconstruction and prediction based on data provided.
+    """
     
-    def __init__(
-        self,
-        window: int,
-        hidden_size: int = 64,
-        num_layers: int = 2,
-        dropout: float = 0.2,
-        task: str = 'reconstruction',
-        lr: float = 1e-3
-    ):
+    def __init__(self, config):
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(config)
         
-        self.model = FinancialLSTM(window, hidden_size, num_layers, dropout, task)
-        self.task = task
+        self.model = FinancialLSTM(
+            self.hparams.HIDDEN_SIZE,
+            self.hparams.NUM_LAYERS,
+            self.hparams.DROPOUT
+        )
         
-    def forward(self, stock_returns, r_market, r_market_next=None):
-        return self.model(stock_returns, r_market, r_market_next)
+    def forward(self, stock_returns_context, r_market_context, r_market_target):
+        return self.model(stock_returns_context, r_market_context, r_market_target)
     
     def _shared_step(self, batch, batch_idx):
-        stock_returns = batch['stock_returns']
-        r_market = batch['r_market']
+        stock_returns_context = batch['stock_returns_context']
+        r_market_context = batch['r_market_context']
+        r_market_target = batch['r_market_target']
         target = batch['target']
         
-        if self.task == 'prediction':
-            r_market_next = batch['r_market_next']
-            reconstruction, alpha, beta = self(stock_returns, r_market, r_market_next)
-        else:
-            reconstruction, alpha, beta = self(stock_returns, r_market)
+        predictions, alpha, beta = self(stock_returns_context, r_market_context, r_market_target)
         
-        loss = nn.functional.mse_loss(reconstruction, target)
-        return loss, reconstruction, alpha, beta
+        loss = nn.functional.mse_loss(predictions, target)
+        
+        return loss, predictions, alpha, beta
     
     def training_step(self, batch, batch_idx):
         loss, _, _, _ = self._shared_step(batch, batch_idx)
-        self.log('train_loss', loss)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, logger=True, prog_bar=False)
         return loss
     
     def validation_step(self, batch, batch_idx):
         loss, _, _, _ = self._shared_step(batch, batch_idx)
-        self.log('val_loss', loss)
+        self.log('val_loss', loss, on_step=True, on_epoch=True, logger=True, prog_bar=False)
         return loss
     
+    def test_step(self, batch, batch_idx):
+        loss, predictions, alpha, beta = self._shared_step(batch, batch_idx)
+        self.log('test_loss', loss, on_step=True, on_epoch=True, logger=True, prog_bar=False)
+        
+        # Log additional metrics for analysis
+        return {
+            'test_loss': loss,
+            'predictions': predictions,
+            'alpha': alpha,
+            'beta': beta
+        }
+    
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.LEARNING_RATE)
+
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, 
+            mode     = 'min', 
+            factor   = 0.5, 
+            patience = self.hparams.NUM_EPOCHS // 2
+        )
+        
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "val_loss",
+                "interval": "epoch",
+                "frequency": 1,
+            }
+        }
