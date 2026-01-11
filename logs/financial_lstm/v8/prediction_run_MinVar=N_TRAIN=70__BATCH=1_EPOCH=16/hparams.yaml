@@ -1,0 +1,9 @@
+batch_size: 1
+dropout: 0.2
+hidden_size: 64
+learning_rate: 0.0001
+loss_fn: !!python/name:models.min_var_loss ''
+lr_patience: 4
+num_epochs: 32
+num_layers: 2
+shuffle_batches: true
