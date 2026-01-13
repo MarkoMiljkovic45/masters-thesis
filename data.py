@@ -1,221 +1,213 @@
 import torch
+import lightning as L
 
-from dataclasses import dataclass, asdict
-from collections.abc import Callable
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, TensorDataset, ConcatDataset
 
-type Datasets = tuple[list[Dataset], list[Dataset], list[Dataset]]
 
-@dataclass(kw_only=True)
-class DistParams:
-    mean: float = 0
-    std : float = 1
-
-def sample_normal(shape, params: DistParams) -> torch.Tensor:
-    return torch.randn(shape) * params.std + params.mean
-
-@dataclass(kw_only=True)
-class DatasetConfig:
-    n_stock        : int
-    n_windows      : int
-    lookback_window: int
-    target_window  : int
-    sample_dist    : Callable = sample_normal
-    prediction_task: bool = False
-    seed           : int = None
-
-@dataclass(kw_only=True)
-class DatasetsConfig(DatasetConfig):
-    n_dataset_train: int
-    n_dataset_val  : int
-    n_dataset_test : int
-
-class SLRDatasetBase(Dataset):
+class SyntheticLogReturnsDGP():
     """
-    Synthetic log returns dataset class.
+    Synthetic log returns data generating process (DGP).
+
+    Creates dataset with synthetic daily log returns for n_stocks that
+    depend on the market returns and adds idiosyncratic noise (Single factor model)
+
+    Each sample returns tensors: context and target:
+
+        Context: shape=(n_stock, lookback_window, features), features by index:
+            0 - r_stock
+            1 - r_market
+            2 - interaction r_stock * r_market
+    
+        Target: shape=(n_stock, target_window, features), features by index:
+            0 - r_stock
+            1 - r_market
+            2 - ground truth stock alpha
+            3 - ground truth stock beta
     """
     
-    def __init__(self, dataset_cfg: DatasetConfig):
-        for key, value in asdict(dataset_cfg).items():
-            setattr(self, key, value)
+    def __init__(self,
+        n_windows      : int = 100,
+        n_stock        : int = 6,
+        lookback_window: int = 60,
+        target_window  : int = 20,
+        prediction_task: bool = True
+    ):
+        self.n_windows       = n_windows
+        self.n_stock         = n_stock
+        self.lookback_window = lookback_window
+        self.target_window   = target_window
+        self.prediction_task = prediction_task
 
         if not self.prediction_task and self.target_window > self.lookback_window:
-            raise ValueError('target window must be <= lookback window for reconstruciton task!')
-
-        self._generate_data()
-
-    def __len__(self):
-        return self.n_windows
+            raise ValueError('target window must be <= lookback window for reconstruciton task')
 
     def _generate_data(self):
-        """Generate synthetic returns data with market factor structure."""
-
-        if self.seed:
-            torch.manual_seed(self.seed)
-        
-        context_points = self.n_windows * self.lookback_window
-        
         if self.prediction_task:
-            target_points = self.n_windows * self.target_window
-            t_total = context_points + target_points
+            t_total = self.n_windows * (self.lookback_window + self.target_window)
         else:
-            t_total = context_points
+            t_total = self.n_windows * self.lookback_window
         
-        # Generate market returns (SPY 20-year statistics:   mean=0.0003, std=0.0122)
-        self.r_market = self.sample_dist(t_total, DistParams(mean=0.0003, std=0.0122))
+        # Generate market returns (SPY 20-year daily statistics: mean=0.0003, std=0.0122)
+        r_market = torch.randn(1, t_total) * 0.0122 + 0.0003
         
         # Generate stock-specific parameters
-        self.alphas    = torch.rand(self.n_stock) * 0.004 - 0.002   # alpha [-0.002, 0.002]
-        self.betas     = torch.rand(self.n_stock) * 3.4 - 1.7       # beta  [  -1.7, 1.7  ]
-        self.idio_vols = torch.rand(self.n_stock) * 0.01 + 0.005    # idio  [ 0.005, 0.015 ]
+        alphas    = torch.rand(self.n_stock, 1) * 0.004 - 0.002   # alpha [-0.002, 0.002]
+        betas     = torch.rand(self.n_stock, 1) * 3.4 - 1.7       # beta  [  -1.7, 1.7  ]
+        idio_vols = torch.rand(self.n_stock, 1) * 0.01 + 0.005    # idio  [ 0.005, 0.015 ]
         
         # Generate stock returns: r_i,t = alpha_i + beta_i * r_market,t + epsilon_i,t
-        systematic    = self.alphas.unsqueeze(1) + self.betas.unsqueeze(1) * self.r_market.unsqueeze(0)
-        idiosyncratic = self.sample_dist((self.n_stock, t_total), DistParams()) * self.idio_vols.unsqueeze(1)
-        self.returns  = systematic + idiosyncratic  # Shape: (n_stock, t_total)
+        r_systematic    = alphas + betas * r_market
+        r_idiosyncratic = torch.randn(self.n_stock, t_total) * idio_vols
+        
+        r_stocks  = r_systematic + r_idiosyncratic
 
-    def __getitem__(self, idx):
-        """
-        Get a single window sample.
-        
-        Returns dict with keys:
-            - 'r_context'       : Historical stock returns
-            - 'r_target'        : Target stock returns to predict/reconstruct
-            - 'r_market_context': Historical market returns for LSTM input
-            - 'r_market_target' : Market returns for output calculation
-        """
-        if idx >= len(self):
-            raise IndexError(f'Index {idx} is out of bounds for dataset of length={len(self)}')
+        return r_stocks, r_market, alphas, betas
 
-        if self.prediction_task:
-            window_step = self.lookback_window + self.target_window
-        else:
-            window_step = self.lookback_window
+    def _transform_data(self, data):
+        r_stocks, r_market, alphas, betas = data
         
-        context_start = idx * window_step
-        context_end   = context_start + self.lookback_window
+        # Broadcast, add features and stack
+        broadcast = torch.broadcast_tensors(
+            r_stocks,
+            r_market,
+            r_stocks * r_market, # Interaction
+            alphas,
+            betas
+        )
         
-        # Calculate time range for target window
-        if self.prediction_task:
-            target_start = context_end
-            target_end   = target_start + self.target_window
-        else:
-            target_start = context_end - self.target_window
-            target_end   = context_end
+        stack = torch.stack(broadcast, dim=-1)
         
-        # Extract data
-        r_context = self.returns[:, context_start:context_end]
-        r_target  = self.returns[:, target_start:target_end]
+        # Lookback-target window split
+        lt_split = stack.split([self.lookback_window, self.target_window] * self.n_windows, dim=1)
+        context = torch.stack(lt_split[::2])
+        target  = torch.stack(lt_split[1::2])
         
-        r_market_context = self.r_market[context_start:context_end]
-        r_market_target  = self.r_market[target_start:target_end]
-        
-        return {
-            'r_context': r_context,
-            'r_target': r_target,
-            'r_market_context': r_market_context,
-            'r_market_target': r_market_target
-        }
+        # Feature selection
+        # 0 - r_stock
+        # 1 - r_market
+        # 2 - interaction r_stock * r_market
+        # 3 - alpha
+        # 4 - beta
+        context = context[:, :, :, [0, 1, 2]]
+        target  = target[:, :, :, [0, 1, 3, 4]]
 
-    @staticmethod
-    def generate_datasets(datasets_cfg: DatasetsConfig, DatasetClass: Dataset) -> Datasets:
-        """
-        Generate train, val, test datasets
-        """
-        n_datasets = datasets_cfg.n_dataset_train + datasets_cfg.n_dataset_val + datasets_cfg.n_dataset_test
+        return context, target
 
-        datasets = [DatasetClass(datasets_cfg) for k in range(n_datasets)]
-    
-        i = datasets_cfg.n_dataset_train
-        j = i + datasets_cfg.n_dataset_val
-        k = j + datasets_cfg.n_dataset_test
-        
-        train_datasets = datasets[0:i]
-        val_datasets   = datasets[i:j]
-        test_datasets  = datasets[j:k]
-    
-        return train_datasets, val_datasets, test_datasets
+    def generate_dataset(self, n_dgp: int = 1):
+        datasets = []
+        for k in range(n_dgp):
+            data        = self._generate_data()
+            transformed = self._transform_data(data)
+            datasets.append(TensorDataset(*transformed))
 
-class SLRDataset(SLRDatasetBase):
+        return ConcatDataset(datasets)
+
+
+class SyntheticLogReturnsDGP_OLS(SyntheticLogReturnsDGP):
     """
-    Synthetic log returns dataset.
+    Synthetic log returns data generating process (DGP) with additional OLS features.
+
+    Creates dataset with synthetic daily log returns for n_stocks that
+    depend on the market returns and adds idiosyncratic noise (Single factor model)
+
+    Each sample returns four tensors: context, target, inv_psi and f_var:
+
+        Context: shape=(n_stock, lookback_window, features), features by index:
+            0 - r_stock
+            1 - r_market
+            2 - interaction r_stock * r_market
+    
+        Target : shape=(n_stock, target_window, features), features by index:
+            0 - r_stock
+            1 - r_market
+            2 - ground truth stock alpha
+            3 - ground truth stock beta
+    
+        Inv_psi: shape=(n_stock) Inverse of residual covariance in flattened form
+
+        F_var  : shape=() Factor variance
+    """
+
+    def __init__(self,
+        n_windows      : int = 100,
+        n_stock        : int = 6,
+        lookback_window: int = 60,
+        target_window  : int = 20,
+        prediction_task: bool = True
+    ):
+        super().__init__(n_windows, n_stock, lookback_window, target_window, prediction_task)
+
+    def _transform_data(self, data):
+        context, target = super()._transform_data(data)
+        
+        r_stocks = context[:, :, :, 0]
+        r_market = context[:, 0, :, 1]
+
+        # Use OLS to calculate residual covariance matrix inverse
+        X = r_market
+        y = r_stocks
+        
+        # Add intercept
+        intercept = torch.ones_like(X)
+        X = torch.stack([intercept, X], dim=-1)
+
+        # OLS formula
+        OLS = torch.matmul(
+            torch.linalg.pinv(torch.matmul(X.mT, X)),
+            torch.matmul(X.mT, y.mT)
+        )
+        
+        OLS_alphas = OLS[:, 0, :].unsqueeze(-1)
+        OLS_betas  = OLS[:, 1, :].unsqueeze(-1)
+        
+        r_recon   = OLS_alphas + torch.matmul(OLS_betas, r_market.unsqueeze(-1).mT)
+        residuals = r_stocks - r_recon
+
+        f_var   = r_market.var(dim=-1)
+        psi     = residuals.var(dim=-1)
+        inv_psi = 1 / psi
+        
+        return context, target, inv_psi, f_var
+
+
+class SLRDataModule(L.LightningDataModule):
+    """
+    Data module for handling SyntheticLogReturnsDGP processes
     """
     
-    def __init__(self, dataset_cfg: DatasetConfig):
-        super().__init__(dataset_cfg)
+    def __init__(self,
+        dgp        : SyntheticLogReturnsDGP,
+        n_dgp_train: int = 70,
+        n_dgp_val  : int = 20,
+        n_dgp_test : int = 10,
+        batch_size : int = 1,
+        seed       : int | None = None
+    ):
+        super().__init__()
 
-    @staticmethod
-    def generate_datasets(datasets_cfg: DatasetsConfig) -> Datasets:
-        return SLRDatasetBase.generate_datasets(datasets_cfg, SLRDataset)
+        if seed:
+            torch.manual_seed(self.seed)
+
+        self.dgp = dgp
+        self.save_hyperparameters(ignore=["dgp"])
         
+    def prepare_data(self):
+        # No preparation necessary
+        pass
 
-def add_intercept(X: torch.Tensor) -> torch.Tensor:
-    X_intercept = torch.ones(len(X), 2)
-    X_intercept[:, 1] = X
-    return X_intercept
+    def setup(self, stage: str):
+        if stage == "fit":
+            self.train_dataset = self.dgp.generate_dataset(n_dgp=self.hparams.n_dgp_train)
+            self.val_dataset   = self.dgp.generate_dataset(n_dgp=self.hparams.n_dgp_val)
 
-class SLRDatasetOLS(SLRDatasetBase):
-    """
-    Synthetic log returns dataset with additional OLS betas for each sample.
-    """
-    
-    def __init__(self, dataset_cfg: DatasetConfig):
-        super().__init__(dataset_cfg)
-        self.factor_var = torch.ones(self.n_windows) * torch.nan
-        self.inv_psi = torch.ones(self.n_windows, self.n_stock, self.n_stock) * torch.nan
+        if stage == "test":
+            self.test_dataset = self.dgp.generate_dataset(n_dgp=self.hparams.n_dgp_test)
 
-    def __getitem__(self, idx):
-        """
-        Get a single window sample.
-        
-        Returns dict with keys:
-            - 'r_context'       : Historical stock returns
-            - 'r_target'        : Target stock returns to predict/reconstruct
-            - 'r_market_context': Historical market returns for LSTM input
-            - 'r_market_target' : Market returns for output calculation
-            - 'factor_var'      : Market factor variance
-            - 'inv_psi'         : Inverse of residual covariance matrix
-        """
-        item = super().__getitem__(idx)
-        
-        if torch.isnan(self.factor_var[idx]):
-            X = item['r_market_context']
-            Y = item['r_context'].T
-            
-            X = add_intercept(X)
-            
-            # OLS
-            OLS = torch.linalg.pinv(X.T @ X) @ (X.T @ Y)
-            OLS_beta = OLS[1, :].unsqueeze(1)
+    def train_dataloader(self):
+        return DataLoader(self.train_dataset, batch_size=self.hparams.batch_size, num_workers=8, shuffle=True)
 
-            r_cov = item['r_context'].cov()
-            f_var = item['r_market_context'].var()
-    
-            psi = torch.diag(r_cov - OLS_beta @ OLS_beta.T * f_var)
-            inv_psi = torch.diag(1 / psi)
+    def val_dataloader(self):
+        return DataLoader(self.val_dataset, batch_size=self.hparams.batch_size, num_workers=2, shuffle=False)
 
-            self.factor_var[idx] = f_var
-            self.inv_psi[idx]    = inv_psi
-
-        item['factor_var'] = self.factor_var[idx]
-        item['inv_psi']    = self.inv_psi[idx]
-        return item
-
-    @staticmethod
-    def generate_datasets(datasets_cfg: DatasetsConfig) -> Datasets:
-        return SLRDatasetBase.generate_datasets(datasets_cfg, SLRDatasetOLS)
-
-
-"""""""""""""""""""""
-WORK IN PROGRESS
-"""""""""""""""""""""
-def sample_t(shape, params: DistParams) -> torch.Tensor:
-
-    # !!! WORK IN PROGRESS, needs DistParams implementation !!! #
-    
-    dist = torch.distributions.studentT.StudentT(df=params.df)
-    samples = dist.sample(shape if isinstance(shape, tuple) else (shape,))
-    
-    # Adjust for Student's t variance: Var(T_df) = df/(df-2) for df > 2
-    scale_factor = (params.df / (params.df - 2)) ** 0.5
-    return samples * (std / scale_factor) + mean
+    def test_dataloader(self):
+        return DataLoader(self.test_dataset, batch_size=1, num_workers=1, shuffle=False)
