@@ -170,6 +170,64 @@ class SyntheticLogReturnsDGP_OLS(SyntheticLogReturnsDGP):
         return context, target, inv_psi, f_var
 
 
+class SyntheticLogReturnsDGP_MinVar(SyntheticLogReturnsDGP_OLS):
+    """
+    Synthetic log returns data generating process (DGP) with additional features
+    for Minimum Variance portfolio optimization
+
+    Creates dataset with synthetic daily log returns for n_stocks that
+    depend on the market returns and adds idiosyncratic noise (Single factor model)
+
+    Each sample returns four tensors: context, target, inv_psi and f_var:
+
+        Context: shape=(n_stock, lookback_window, features), features by index:
+            0 - r_stock
+            1 - r_market
+            2 - interaction r_stock * r_market
+    
+        Target : shape=(n_stock, target_window, features), features by index:
+            0 - r_stock
+            1 - r_market
+            2 - ground truth stock alpha
+            3 - ground truth stock beta
+    
+        Inv_psi: shape=(n_stock) Inverse of residual covariance in flattened form
+
+        F_var  : shape=() Factor variance
+
+        Sigma_target: shape=() Target portfolio variance
+    """
+
+    def __init__(self,
+        n_windows      : int = 100,
+        n_stock        : int = 6,
+        lookback_window: int = 60,
+        target_window  : int = 20,
+        prediction_task: bool = True
+    ):
+        super().__init__(n_windows, n_stock, lookback_window, target_window, prediction_task)
+
+    def _transform_data(self, data):
+        context, target, inv_psi, f_var = super()._transform_data(data)
+        
+        r_target = target[:, :, :, 0]
+
+        mean = r_target.mean(dim=2, keepdim=True)
+        centered = r_target - mean
+        
+        r_target_cov = 1 / (self.n_windows - 1) * torch.matmul(centered, centered.mT)
+        inv_r_target_cov = torch.linalg.pinv(r_target_cov)
+
+        w_target = inv_r_target_cov.sum(dim=2, keepdim=True) / inv_r_target_cov.sum(dim=(1, 2), keepdim=True)
+
+        sigma_target = torch.matmul(
+            torch.matmul(w_target.mT, r_target_cov),
+            w_target
+        ).squeeze()
+        
+        return context, target, inv_psi, f_var, r_target_cov, torch.log(sigma_target)
+
+
 class SLRDataModule(L.LightningDataModule):
     """
     Data module for handling SyntheticLogReturnsDGP processes
@@ -204,10 +262,10 @@ class SLRDataModule(L.LightningDataModule):
             self.test_dataset = self.dgp.generate_dataset(n_dgp=self.hparams.n_dgp_test)
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.hparams.batch_size, num_workers=8, shuffle=True)
+        return DataLoader(self.train_dataset, batch_size=self.hparams.batch_size, num_workers=8, shuffle=True, pin_memory=True)
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.hparams.batch_size, num_workers=2, shuffle=False)
+        return DataLoader(self.val_dataset, batch_size=self.hparams.batch_size, num_workers=2, shuffle=False, pin_memory=True)
 
     def test_dataloader(self):
         return DataLoader(self.test_dataset, batch_size=1, num_workers=1, shuffle=False)

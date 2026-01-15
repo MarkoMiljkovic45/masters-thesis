@@ -1,76 +1,101 @@
 import torch
-import lightning.pytorch as pl
+import lightning as L
 
-from dataclasses import dataclass, asdict
+from torchmetrics import Metric, MeanSquaredError, MetricCollection
 
-@dataclass(kw_only=True)
-class ModelConfig:
-    hidden_size    : int = 64
-    num_layers     : int = 2
-    dropout        : float = 0.2
-    learning_rate  : float = 1e-4
-    num_epochs     : int = 16
-    batch_size     : int = 1
-    shuffle_batches: bool = True
-    lr_patience    : int = 4
-    loss_fn        : object = torch.nn.MSELoss()
 
-    def dict(self):
-        return asdict(self)
-
-class MultivariateGaussianNLLLoss:
+class MultivariateGaussianNLLLoss(Metric):
     """
-    Custom Multivariate Gaussian Negative Log Likelihood Loss
+    Custom Multivariate Gaussian Negative Log Likelihood Loss as a TorchMetric.
+    This allows it to be used both as a loss function and a tracked metric.
     """
+    is_differentiable = True
+    higher_is_better = False
+    full_state_update = False
 
     def __init__(self, n: int, K: int):
-        self.n = n
-        self.K = K
+        """
+            n: Number of samples (stocks)
+            K: Number of variables (dimensions)
+        """
+        super().__init__()
+        
+        # Register as buffers for GPU compatibility
+        self.register_buffer('n', torch.tensor(n))
+        self.register_buffer('K', torch.tensor(K))
+    
+        # Calculate constant term: n*K*0.5*log(2*pi)
+        pi = torch.acos(torch.tensor(0)) * 2
+        constant = self.n * self.K * 0.5 * torch.log(2 * pi)
+        self.register_buffer('C', constant)
+        
+        # State for metric tracking
+        self.add_state("sum_loss", default=torch.tensor(0.0), dist_reduce_fx="sum")
+        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
 
-        pi = torch.acos(torch.zeros(1)) * 2
-        self.C = n * K * 0.5 * torch.log(2 * pi)
-        self.ONES = torch.ones(n, 1)
+    def update(self, mean: torch.Tensor, inv_cov: torch.Tensor, target: torch.Tensor):
+        """Update state with batch of predictions and targets."""
+        loss = self._compute_loss(mean, inv_cov, target)
+        assert not torch.isnan(loss)
+        
+        self.sum_loss += loss
+        self.total += 1
 
-    def __call__(self, mean, inv_cov, target):
-        mean_diff = target - mean
-        quadratic = 0.5 * (mean_diff.T @ inv_cov @ mean_diff @ self.ONES)
+    def compute(self):
+        return self.sum_loss / self.total
+
+    def _compute_loss(self, mean: torch.Tensor, inv_cov: torch.Tensor, target: torch.Tensor):
+        """
+        Compute the negative log likelihood.
+        
+        Args:
+            mean   : Predicted mean (K, 1)
+            inv_cov: Inverse covariance matrix (K, K)
+            target : Target samples (K, n)
+        """
+        mean_diff = target - mean # (K, n)
+        
+        # Quadratic form: 0.5 * tr((x-μ)^T Σ^-1 (x-μ))
+        quadratic = 0.5 * torch.trace(
+            torch.matmul(
+                torch.matmul(mean_diff.T, inv_cov),
+                mean_diff
+            )
+        )
+        
+        # Log determinant term
         log_det = torch.logdet(inv_cov)
         
+        # Full NLL: C - 0.5*n*log|Σ^-1| + 0.5*tr((x-μ)^T Σ^-1 (x-μ))
         loss = self.C - self.n * 0.5 * log_det + quadratic
-        return loss.mean()
+        
+        return loss
+        
 
-class FinancialLSTM_MGNLL(pl.LightningModule):
-    """
-    FinancialLSTM with Multivariate Gaussian Negative Log likelihood loss
+###########################################################################################################
 
-    Task-agnostic LSTM that estimates alpha and beta from historical data,
-    then applies them to any target market return sequence
-    """
-    
-    def __init__(self, model_cfg: ModelConfig):
+
+class FinancialLSTM_Model(torch.nn.Module):
+    def __init__(self,
+        input_size: int = 3,
+        hidden_size: int = 64,
+        num_layers: int = 2,
+        dropout: float = 0.2
+    ):
         super().__init__()
-        self.save_hyperparameters(asdict(model_cfg))
 
-        # LSTM processes historical data (stock returns, market returns, interaction)
         self.lstm = torch.nn.LSTM(
             input_size  = 3,
-            hidden_size = self.hparams.hidden_size,
-            num_layers  = self.hparams.num_layers,
-            dropout     = self.hparams.dropout if self.hparams.num_layers > 1 else 0,
+            hidden_size = hidden_size,
+            num_layers  = num_layers,
+            dropout     = dropout if num_layers > 1 else 0,
             batch_first = True
         )
         
-        # Heads to estimate alpha and beta
-        self.alpha_head = torch.nn.Linear(self.hparams.hidden_size, 1)
-        self.beta_head  = torch.nn.Linear(self.hparams.hidden_size, 1)
-        
-        self.loss_fn = model_cfg.loss_fn
-        self.test_loss_fn = torch.nn.MSELoss()
-        
-    def forward(self, r_context: torch.Tensor, r_market_context: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        interaction = r_context * r_market_context
-        lstm_input  = torch.stack([r_context, r_market_context, interaction], dim=-1)
-        
+        self.alpha_head = torch.nn.Linear(hidden_size, 1)
+        self.beta_head  = torch.nn.Linear(hidden_size, 1)
+
+    def forward(self, lstm_input: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         lstm_out, _  = self.lstm(lstm_input)
         final_hidden = lstm_out[:, -1, :]
         
@@ -78,66 +103,476 @@ class FinancialLSTM_MGNLL(pl.LightningModule):
         beta  = self.beta_head(final_hidden)
         
         return alpha, beta
-    
-    def _shared_step(self, batch, batch_idx):
-        r_context        = batch['r_context'].squeeze()
-        r_market_context = batch['r_market_context'].squeeze()
-        r_market_target  = batch['r_market_target'].squeeze()
-        r_target         = batch['r_target'].squeeze()
 
-        r_market_expanded = r_market_context.repeat(r_context.shape[0], 1)
-        
-        alpha, beta = self(r_context, r_market_expanded) # (n_stock, 1), (n_stock, 1)
 
-        # Woodbury matrix identity
-        f_var   = batch['factor_var'].squeeze()
-        inv_psi = batch['inv_psi'].squeeze()
+class FinancialLSTM_MSE(L.LightningModule):
+    """
+    Lightning System for training FinancialLSTM with MSE
+    """
+
+    def __init__(
+        self,
+        n_stocks       : int = 6,
+        lookback_window: int = 60,
+        target_window  : int = 20,
+        input_size     : int = 3,
+        hidden_size    : int = 64,
+        num_layers     : int = 2,
+        dropout        : float = 0.2,
+        learning_rate  : float = 1e-4,
+        lr_patience    : int = 4
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+
+        # Initialize model
+        self.model = FinancialLSTM_Model(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            dropout=dropout
+        )
+
+        # Initialize metrics
+        self.train_metric = MeanSquaredError()
+        self.val_metric   = MeanSquaredError()
         
-        r_inv_cov = inv_psi - (inv_psi @ beta @ beta.T @ inv_psi) / (1/f_var + beta.T @ inv_psi @ beta)
-        
-        loss = self.loss_fn(alpha, r_inv_cov, r_target)
-        
-        return loss, alpha, beta
-    
+        # For test: MSE on reconstructed returns plus alpha/beta metrics
+        self.test_metrics = MetricCollection({
+            'mse_returns': MeanSquaredError(),
+            'mse_alpha'  : MeanSquaredError(),
+            'mse_beta'   : MeanSquaredError()
+        })
+
+    def forward(self, context: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.model(context)
+
     def training_step(self, batch, batch_idx):
-        loss, _, _ = self._shared_step(batch, batch_idx)
-        self.log('train_loss', loss, on_step=True, on_epoch=True, logger=True, prog_bar=False)
-        return loss
+        context  = batch[0].squeeze()  # (n_stocks, lookback_window, features)
+        target   = batch[1].squeeze()  # (n_stocks, target_window, features)
+        
+        # Extract components
+        r_target        = target[:, :, 0]   # (n_stocks, target_window)
+        r_market_target = target[:, :, 1]   # (n_stocks, target_window)
+        
+        # Forward pass
+        alpha_pred, beta_pred = self(context)  # (n_stocks, 1)
+        r_pred = alpha_pred + beta_pred * r_market_target
     
+        loss = self.train_metric(r_pred, r_target)
+        self.log('train_loss', self.train_metric, on_step=True, on_epoch=True, prog_bar=False)
+        
+        return loss
+
     def validation_step(self, batch, batch_idx):
-        loss, _, _ = self._shared_step(batch, batch_idx)
-        self.log('val_loss', loss, on_step=True, on_epoch=True, logger=True, prog_bar=True)
-        return loss
+        context  = batch[0].squeeze()  # (n_stocks, lookback_window, features)
+        target   = batch[1].squeeze()  # (n_stocks, target_window, features)
+        
+        # Extract components
+        r_target        = target[:, :, 0]   # (n_stocks, target_window)
+        r_market_target = target[:, :, 1]   # (n_stocks, target_window)
+        
+        # Forward pass
+        alpha_pred, beta_pred = self(context)  # (n_stocks, 1)
+        r_pred = alpha_pred + beta_pred * r_market_target
     
+        loss = self.val_metric(r_pred, r_target)
+        self.log('val_loss', self.val_metric, on_step=True, on_epoch=True, prog_bar=False)
+
     def test_step(self, batch, batch_idx):
-        r_context = batch['r_context']
-        r_market_context = batch['r_market_context']
-        r_market_target = batch['r_market_target']
-        r_target = batch['r_target']
+        """
+        Test step: evaluate reconstruction MSE and alpha/beta accuracy.
+        """
+        # Unpack batch
+        context = batch[0].squeeze(0)   # (n_stocks, lookback_window, features)
+        target  = batch[1].squeeze(0)   # (n_stocks, target_window, features)
         
-        alpha, beta = self(r_context, r_market_context)
-        predictions = alpha.unsqueeze(-1) + beta.unsqueeze(-1) * r_market_target
-
-        loss = self.test_loss_fn(predictions, r_target)
-
-        self.log('test_loss', loss, on_step=True, on_epoch=True, logger=True, prog_bar=False)
+        # Extract components
+        r_target        = target[:, :, 0]   # (n_stocks, target_window)
+        r_market_target = target[:, :, 1]   # (n_stocks, target_window)
+        alpha_gt        = target[:, 0, 2]   # (n_stocks)
+        beta_gt         = target[:, 0, 3]   # (n_stocks)
         
-        # Log additional metrics for analysis
-        return {
-            'test_loss': loss,
-            'predictions': predictions,
-            'alpha': alpha,
-            'beta': beta
-        }
-    
+        # Forward pass
+        alpha_pred, beta_pred = self(context)  # (n_stocks, 1)
+        r_pred = alpha_pred + beta_pred * r_market_target
+        
+        # Update metrics
+        self.test_metrics['mse_returns'].update(r_pred, r_target)
+        self.test_metrics['mse_alpha'].update(alpha_pred.squeeze(), alpha_gt)
+        self.test_metrics['mse_beta'].update(beta_pred.squeeze(), beta_gt)
+        
+
+    def on_test_epoch_end(self):
+        """Log test metrics at epoch end."""
+        # Compute and log all test metrics
+        metrics = self.test_metrics.compute()
+        
+        for metric_name, metric_value in metrics.items():
+            self.log(f'test_{metric_name}', metric_value)
+        
+        self.test_metrics.reset()
+
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
+        """Configure optimizer and learning rate scheduler."""
+        optimizer = torch.optim.Adam(
+            self.parameters(), 
+            lr=self.hparams.learning_rate
+        )
 
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, 
-            mode     = 'min', 
-            factor   = 0.5, 
-            patience = self.hparams.lr_patience
+            optimizer,
+            mode='min',
+            factor=0.5,
+            patience=self.hparams.lr_patience
+        )
+        
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "val_loss_epoch",
+                "interval": "epoch",
+                "frequency": 1,
+            }
+        }
+    
+
+
+class FinancialLSTM_System(L.LightningModule):
+    """
+    Lightning System for training FinancialLSTM with Multivariate Gaussian NLL.
+    
+    This system handles:
+    - Training with custom MGNLL loss
+    - Validation with MGNLL metric
+    - Testing with MSE on reconstructed returns plus alpha/beta analysis
+    """
+
+    def __init__(
+        self,
+        n_stocks       : int = 6,
+        lookback_window: int = 60,
+        target_window  : int = 20,
+        input_size     : int = 3,
+        hidden_size    : int = 64,
+        num_layers     : int = 2,
+        dropout        : float = 0.2,
+        learning_rate  : float = 1e-4,
+        lr_patience    : int = 4
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+
+        # Initialize model
+        self.model = FinancialLSTM_Model(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            dropout=dropout
+        )
+
+        # Initialize metrics
+        self.train_metric = MultivariateGaussianNLLLoss(n=target_window, K=n_stocks)
+        self.val_metric   = MultivariateGaussianNLLLoss(n=target_window, K=n_stocks)
+        
+        # For test: MSE on reconstructed returns plus alpha/beta metrics
+        self.test_metrics = MetricCollection({
+            'mse_returns': MeanSquaredError(),
+            'mse_alpha'  : MeanSquaredError(),
+            'mse_beta'   : MeanSquaredError()
+        })
+
+    def forward(self, context: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Arg:
+            context: (n_stocks, lookback_window, features)
+        
+        Returns:
+            alpha, beta: Each (n_stocks, 1)
+        """
+        return self.model(context)
+
+    def _compute_inverse_covariance(
+        self,
+        beta: torch.Tensor,
+        inv_psi: torch.Tensor,
+        f_var: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Compute inverse covariance using Woodbury matrix identity.
+        
+       Args:
+            beta: (n_stocks, 1)
+            inv_psi: (n_stocks, n_stocks) diagonal matrix
+            f_var: scalar factor variance
+        
+        Returns:
+            r_inv_cov: (n_stocks, n_stocks)
+        """
+        inv_psi_beta   = torch.matmul(inv_psi, beta)   # (n_stocks, 1)
+        beta_T_inv_psi = torch.matmul(beta.T, inv_psi) # (1, n_stocks)
+        
+        beta_T_inv_psi_beta = torch.matmul(            # (1, 1)
+            beta_T_inv_psi, 
+            beta
+        )
+        
+        denominator = (1.0 / f_var) + beta_T_inv_psi_beta                       # (1, 1)
+        correction  = torch.matmul(inv_psi_beta, beta_T_inv_psi) / denominator  # (n_stock, n_stock)
+        
+        # Apply Woodbury identity
+        r_inv_cov = inv_psi - correction
+        
+        return r_inv_cov
+
+    def training_step(self, batch, batch_idx):
+        context = batch[0].squeeze()  # (n_stocks, lookback_window, features)
+        target  = batch[1].squeeze()  # (n_stocks, target_window, features)
+        inv_psi = batch[2].squeeze()  # (n_stocks,)
+        f_var   = batch[3].squeeze()  # scalar
+        
+        # Un-flatten psi
+        inv_psi = torch.diag(inv_psi)  # (n_stocks, n_stocks)
+        
+        # Forward pass
+        alpha, beta = self(context)  # (n_stocks, 1), (n_stocks, 1)
+        
+        r_inv_cov = self._compute_inverse_covariance(beta, inv_psi, f_var)
+        r_target = target[:, :, 0]
+        
+        loss = self.train_metric(alpha, r_inv_cov, r_target)
+        self.log('train_mgnll', self.train_metric, on_step=True, on_epoch=True, prog_bar=False)
+        
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        context = batch[0].squeeze()  # (n_stocks, lookback_window, features)
+        target  = batch[1].squeeze()  # (n_stocks, target_window, features)
+        inv_psi = batch[2].squeeze()  # (n_stocks,)
+        f_var   = batch[3].squeeze()  # scalar
+
+        # Un-flatten psi
+        inv_psi = torch.diag(inv_psi)
+        
+        # Forward pass
+        alpha, beta = self(context)  # (n_stocks, 1), (n_stocks, 1)
+        
+        r_inv_cov = self._compute_inverse_covariance(beta, inv_psi, f_var)
+        r_target = target[:, :, 0]
+        
+        loss = self.val_metric(alpha, r_inv_cov, r_target)
+        self.log('val_mgnll', self.val_metric, on_step=True, on_epoch=True, prog_bar=False)
+
+    def test_step(self, batch, batch_idx):
+        """
+        Test step: evaluate reconstruction MSE and alpha/beta accuracy.
+        """
+        # Unpack batch
+        context = batch[0].squeeze(0)   # (n_stocks, lookback_window, features)
+        target  = batch[1].squeeze(0)   # (n_stocks, target_window, features)
+        
+        # Extract components
+        r_target        = target[:, :, 0]   # (n_stocks, target_window)
+        r_market_target = target[:, :, 1]   # (n_stocks, target_window)
+        alpha_gt        = target[:, 0, 2]   # (n_stocks)
+        beta_gt         = target[:, 0, 3]   # (n_stocks)
+        
+        # Forward pass
+        alpha_pred, beta_pred = self(context)  # (n_stocks, 1)
+        r_pred = alpha_pred + beta_pred * r_market_target
+        
+        # Update metrics
+        self.test_metrics['mse_returns'].update(r_pred, r_target)
+        self.test_metrics['mse_alpha'].update(alpha_pred.squeeze(), alpha_gt)
+        self.test_metrics['mse_beta'].update(beta_pred.squeeze(), beta_gt)
+        
+
+    def on_test_epoch_end(self):
+        """Log test metrics at epoch end."""
+        # Compute and log all test metrics
+        metrics = self.test_metrics.compute()
+        
+        for metric_name, metric_value in metrics.items():
+            self.log(f'test_{metric_name}', metric_value)
+        
+        self.test_metrics.reset()
+
+    def configure_optimizers(self):
+        """Configure optimizer and learning rate scheduler."""
+        optimizer = torch.optim.Adam(
+            self.parameters(), 
+            lr=self.hparams.learning_rate
+        )
+
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode='min',
+            factor=0.5,
+            patience=self.hparams.lr_patience
+        )
+        
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "val_mgnll",
+                "interval": "epoch",
+                "frequency": 1,
+            }
+        }
+
+
+class FinancialLSTM_MinVar(L.LightningModule):
+    """
+    Lightning System for training FinancialLSTM for MinVar optimization
+    """
+
+    def __init__(
+        self,
+        input_size     : int = 3,
+        hidden_size    : int = 64,
+        num_layers     : int = 2,
+        dropout        : float = 0.2,
+        learning_rate  : float = 1e-4,
+        lr_patience    : int = 4
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+
+        # Initialize model
+        self.model = FinancialLSTM_Model(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            dropout=dropout
+        )
+        
+        # For test: MSE on reconstructed returns plus alpha/beta metrics
+        self.test_metrics = MetricCollection({
+            'mse_returns': MeanSquaredError(),
+            'mse_alpha'  : MeanSquaredError(),
+            'mse_beta'   : MeanSquaredError()
+        })
+
+    def forward(self, context: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.model(context)
+
+    def _compute_inverse_covariance(
+        self,
+        beta: torch.Tensor,
+        inv_psi: torch.Tensor,
+        f_var: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Compute inverse covariance using Woodbury matrix identity.
+        
+       Args:
+            beta: (n_stocks, 1)
+            inv_psi: (n_stocks, n_stocks) diagonal matrix
+            f_var: scalar factor variance
+        
+        Returns:
+            r_inv_cov: (n_stocks, n_stocks)
+        """
+        inv_psi_beta   = torch.matmul(inv_psi, beta)   # (n_stocks, 1)
+        beta_T_inv_psi = torch.matmul(beta.T, inv_psi) # (1, n_stocks)
+        
+        beta_T_inv_psi_beta = torch.matmul(            # (1, 1)
+            beta_T_inv_psi, 
+            beta
+        )
+        
+        denominator = (1.0 / f_var) + beta_T_inv_psi_beta                       # (1, 1)
+        correction  = torch.matmul(inv_psi_beta, beta_T_inv_psi) / denominator  # (n_stock, n_stock)
+        
+        # Apply Woodbury identity
+        r_inv_cov = inv_psi - correction
+        
+        return r_inv_cov
+
+    def _shared_step(self, batch):
+        context      = batch[0].squeeze()  # (n_stocks, lookback_window, features)
+        target       = batch[1].squeeze()  # (n_stocks, target_window, features)
+        inv_psi      = batch[2].squeeze()  # (n_stocks,)
+        f_var        = batch[3].squeeze()  # scalar
+        r_target_cov = batch[4].squeeze()  # (n_stock, n_stock)
+        sigma_target = batch[5].squeeze()  # scalar
+        
+        # Un-flatten psi
+        inv_psi = torch.diag(inv_psi)  # (n_stocks, n_stocks)
+        
+        # Forward pass
+        alpha, beta = self(context)  # (n_stocks, 1), (n_stocks, 1)
+        
+        r_inv_cov = self._compute_inverse_covariance(beta, inv_psi, f_var)
+        w_pred = r_inv_cov.sum(dim=1, keepdim=True) / r_inv_cov.sum()
+        
+        sigma_pred = torch.matmul(
+            torch.matmul(w_pred.T, r_target_cov),
+            w_pred
+        ).squeeze()
+        
+        loss = sigma_pred - sigma_target
+        return loss
+        
+
+    def training_step(self, batch, batch_idx):
+        loss = self._shared_step(batch)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=False)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss = self._shared_step(batch)
+        self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=False)
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        """
+        Test step: evaluate reconstruction MSE and alpha/beta accuracy.
+        """
+        # Unpack batch
+        context = batch[0].squeeze(0)   # (n_stocks, lookback_window, features)
+        target  = batch[1].squeeze(0)   # (n_stocks, target_window, features)
+        
+        # Extract components
+        r_target        = target[:, :, 0]   # (n_stocks, target_window)
+        r_market_target = target[:, :, 1]   # (n_stocks, target_window)
+        alpha_gt        = target[:, 0, 2]   # (n_stocks)
+        beta_gt         = target[:, 0, 3]   # (n_stocks)
+        
+        # Forward pass
+        alpha_pred, beta_pred = self(context)  # (n_stocks, 1)
+        r_pred = alpha_pred + beta_pred * r_market_target
+        
+        # Update metrics
+        self.test_metrics['mse_returns'].update(r_pred, r_target)
+        self.test_metrics['mse_alpha'].update(alpha_pred.squeeze(), alpha_gt)
+        self.test_metrics['mse_beta'].update(beta_pred.squeeze(), beta_gt)
+        
+
+    def on_test_epoch_end(self):
+        """Log test metrics at epoch end."""
+        # Compute and log all test metrics
+        metrics = self.test_metrics.compute()
+        
+        for metric_name, metric_value in metrics.items():
+            self.log(f'test_{metric_name}', metric_value)
+        
+        self.test_metrics.reset()
+
+    def configure_optimizers(self):
+        """Configure optimizer and learning rate scheduler."""
+        optimizer = torch.optim.Adam(
+            self.parameters(), 
+            lr=self.hparams.learning_rate
+        )
+
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode='min',
+            factor=0.5,
+            patience=self.hparams.lr_patience
         )
         
         return {
@@ -149,42 +584,3 @@ class FinancialLSTM_MGNLL(pl.LightningModule):
                 "frequency": 1,
             }
         }
-
-def min_var_loss(w, r_target):
-    one = torch.ones(r_target.shape[0], 1)
-    
-    cov_oos = r_target.cov()
-    inv_cov_oos = torch.linalg.pinv(cov_oos)
-    w_target = (inv_cov_oos @ one) / (one.T @ inv_cov_oos @ one)
-
-    sigma_oos    = w.T @ cov_oos @ w
-    sigma_target = w_target.T @ cov_oos @ w_target
-
-    loss = sigma_oos - sigma_target
-    return loss
-
-class FinancialLSTM_MinVar(FinancialLSTM_MGNLL):
-    def __init__(self, model_cfg: ModelConfig):
-        super().__init__(model_cfg)
-
-    def _shared_step(self, batch, batch_idx):
-        r_context        = batch['r_context'].squeeze()
-        r_market_context = batch['r_market_context'].squeeze()
-        r_market_target  = batch['r_market_target'].squeeze()
-        r_target         = batch['r_target'].squeeze()
-
-        r_market_expanded = r_market_context.repeat(r_context.shape[0], 1)
-        
-        alpha, beta = self(r_context, r_market_expanded) # (n_stock, 1), (n_stock, 1)
-
-        # Woodbury matrix identity
-        f_var   = batch['factor_var'].squeeze()
-        inv_psi = batch['inv_psi'].squeeze()
-        r_inv_cov = inv_psi - (inv_psi @ beta @ beta.T @ inv_psi) / (1/f_var + beta.T @ inv_psi @ beta)
-
-        one = torch.ones(r_context.shape[0], 1)
-        w = (r_inv_cov @ one) / (one.T @ r_inv_cov @ one)
-        
-        loss = self.loss_fn(w, r_target)
-        
-        return loss, (alpha, beta), w
