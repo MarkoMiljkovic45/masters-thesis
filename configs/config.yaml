@@ -1,0 +1,18 @@
+defaults:
+  - datamodule: synthetic
+  - model: small
+  - loss: mse
+  - trainer: fast
+  - override hydra/launcher: joblib
+  - _self_
+
+logger:
+  save_dir: logs
+  name: FinancialLstm/${datamodule.name}
+  version: ${loss.name}_${model.name}_lr${model.learning_rate}_${trainer.name}
+  default_hp_metric: false
+
+hydra:
+  launcher:
+    n_jobs: 1
+    verbose: 10

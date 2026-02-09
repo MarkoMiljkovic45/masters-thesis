@@ -1,0 +1,6 @@
+max_epochs: 4
+gradient_clip_val: 5.0
+precision: 32-true
+enable_progress_bar: true
+enable_model_summary: true
+name: fast

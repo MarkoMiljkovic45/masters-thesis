@@ -1,0 +1,3 @@
+name: combined
+module_class: FinancialLstmCombined
+mse_weight: 100

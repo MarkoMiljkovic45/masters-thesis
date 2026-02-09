@@ -1,0 +1,8 @@
+data_dir: data/real
+lookback_window: 60
+target_window: 30
+stride: 5
+prediction_task: true
+interaction_only: true
+batch_size: 1
+name: real

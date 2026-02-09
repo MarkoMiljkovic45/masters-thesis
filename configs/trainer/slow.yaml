@@ -1,0 +1,7 @@
+max_epochs: 32
+gradient_clip_val: 2.0
+precision: 32-true
+enable_progress_bar: false
+enable_model_summary: true
+check_val_every_n_epoch: 4
+name: slow

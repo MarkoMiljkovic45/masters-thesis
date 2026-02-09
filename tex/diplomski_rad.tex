@@ -1,0 +1,212 @@
+\documentclass[diplomskirad, upload]{fer}
+% Dodaj opciju upload za generiranje konačne verzije koja se učitava na FERWeb
+% Add the option upload to generate the final version which is uploaded to FERWeb
+
+
+% Ovdje dodati pakete npr. \usepackage{blindtext}
+
+
+%--- PODACI O RADU / THESIS INFORMATION ----------------------------------------
+
+% Naslov na engleskom jeziku / Title in English
+\title{TBD}
+
+% Naslov na hrvatskom jeziku / Title in Croatian
+\naslov{TBD}
+
+% Broj rada / Thesis number
+\brojrada{1234}
+
+% Autor / Author
+\author{Marko Miljković}
+
+% Mentor 
+\mentor{doc.~dr.~sc.~Stjepan~Begušić}
+
+% Datum rada na engleskom jeziku / Date in English
+\date{February, 2026}
+
+% Datum rada na hrvatskom jeziku / Date in Croatian
+\datum{Veljača, 2026.}
+
+%-------------------------------------------------------------------------------
+
+
+\begin{document}
+
+
+% Naslovnica se automatski generira / Titlepage is automatically generated
+\maketitle
+
+
+%--- ZADATAK / THESIS ASSIGNMENT -----------------------------------------------
+
+% Zadatak se ubacuje iz vanjske datoteke / Thesis assignment is included from external file
+% Upiši ime PDF datoteke preuzete s FERWeb-a / Enter the filename of the PDF downloaded from FERWeb
+\zadatak{filename.pdf}
+
+
+%--- ZAHVALE / ACKNOWLEDGMENT --------------------------------------------------
+
+\begin{zahvale}
+  % Ovdje upišite zahvale / Write in the acknowledgment
+  TODO Zahvala
+\end{zahvale}
+
+
+% Odovud započinje numeriranje stranica / Page numbering starts from here
+\mainmatter
+
+
+% Sadržaj se automatski generira / Table of contents is automatically generated
+\tableofcontents
+
+
+%--- UVOD / INTRODUCTION -------------------------------------------------------
+\chapter{Uvod}
+\label{pog:uvod}
+
+TODO Uvod, ovdje ćemo testirati citiranje \cite{johnson1998,tsay2010}.
+
+%-------------------------------------------------------------------------------
+\chapter{Metodologija}
+\label{pog:metodologija}
+
+Ovo poglavlje pokriva teoretsku osnovu potrebnu za razumijevanje implementiranog modela dubokog učenja te 
+samu arhitekturu modela. Prvo ćemo definirati varijable pomoću kojih ćemo kasnije oblikovati naše
+podatke. Zatim ćemo proći osnove faktorskih modela i razmotriti kako jednofaktorski model može objasniti
+povrate imovina. Na kraju ćemo opisati sam model dubokog učenja, njegovu arhitekturu i funckije cilja
+koje se koriste u ovom radu.
+
+\section{Varijable i povrati imovine}
+\label{sec:varijable}
+
+Radovi koji se bave financijama uglavnom koriste povrate umijesto samih cijena imovine. Postoje dva glavna
+razloga za to. Prvi je to što povrati sažimaju kretanja cijena te ih stavljaju na jednaku i usporedivu skalu.
+Drugi se odnosi na povoljnija statistička svojstva povrata u odnosu na cijene. Međutim postoji više načina za
+definirati povrate.
+
+Nek je $P_t$ cijena imovine u trenutku $t$. U nastavku ćemo razmotriti definicije povrata koji se koriste
+kroz ovaj rad.
+
+
+\subsection{Jednostavni (artimetički) povrati}
+\label{subsec:artimeticki}
+
+Ako imovinu posjedujemo od trenutka $t-1$ do trenutka $t$, dobivamo artimetički \emph{bruto} povrat:
+\begin{equation}
+  1 + R_t = \frac{P_t}{P_{t-1}} \mspace{48mu} \text{ili} \mspace{48mu} P_t = P_{t-1}(1+R_t)
+\label{eq:artimeticki_bruto}
+\end{equation}
+
+Odgovarajući artimetički \emph{neto} povrat dan je izrazom:
+\begin{equation}
+  R_t = \frac{P_t}{P_{t-1}} - 1 = \frac{P_t - P_{t-1}}{P_{t-1}}
+\label{eq:artimeticki_neto}
+\end{equation}
+
+Ukoliko imovinu držimo kroz $T$ perioda ukupni artimetički \emph{bruto} povrat dobivamo izrazom:
+\begin{align}
+  1 + R_{total} = \frac{P_T}{P_1} &= \frac{P_T}{P_{T-1}} \times \frac{P_{T-1}}{P_{T-2}} \times ... \times \frac{P_2}{P_1} \\
+  &= (1+R_T)(1+R_{T-1})\ ...\ (1+R_1) \\
+  &= \prod_{t=1}^{T}(1 + R_t).
+\end{align}
+
+
+\subsection{Kontinuirani (logaritamski) povrati}
+\label{subsec:logaritamski}
+
+Prirodni logaritam artimetičkog \emph{bruto} povrata (\ref{eq:artimeticki_bruto}) daje nam kontinuirani
+odnosno logaritamski povrat:
+\begin{equation}
+  r_t = ln(1 + R_t) = ln\frac{P_t}{P_{t-1}} = p_t - p_{t-1},
+\label{eq:logartiamski}
+\end{equation}
+gdje $p_t = ln(P_t)$. 
+
+Jedan od načina za modeliranje ovakvih podataka je pomoću faktorskih modela.
+
+
+\section{Faktorski modeli}
+\label{sec:faktorski}
+
+TODO Objasnjenje faktorskih modela
+
+
+\section{Jednofaktorski model povrata}
+\label{sec:jednofaktorski}
+
+TODO Objašnjenje jednofaktorskog modela
+
+
+\section{LSTM Model}
+\label{sec:lstm}
+
+TODO Objasniti arhitekturu našeg modela, različiti pristupi
+TOOD Možda će biti potrebno raščlanit po funkcijama cilja
+
+
+%-------------------------------------------------------------------------------
+\chapter{Podatci}
+\label{pog:podatci}
+
+TODO Odakle nam podatci, kako su procesirani, povezat s definiranim varijablama
+
+
+%-------------------------------------------------------------------------------
+\chapter{Rezultati}
+\label{pog:rezultati}
+
+TODO Rezultati i rasprava
+
+
+%--- ZAKLJUČAK / CONCLUSION ----------------------------------------------------
+\chapter{Zaključak}
+\label{pog:zakljucak}
+
+TODO Zaključak
+
+
+%--- LITERATURA / REFERENCES ---------------------------------------------------
+
+% Literatura se automatski generira iz zadane .bib datoteke / References are automatically generated from the supplied .bib file
+% Upiši ime BibTeX datoteke bez .bib nastavka / Enter the name of the BibTeX file without .bib extension
+\bibliography{literatura}
+
+
+
+%--- SAŽETAK / ABSTRACT --------------------------------------------------------
+
+% Sažetak na hrvatskom
+\begin{sazetak}
+  Unesite sažetak na hrvatskom.
+
+\end{sazetak}
+
+\begin{kljucnerijeci}
+  prva ključna riječ; druga ključna riječ; treća ključna riječ
+\end{kljucnerijeci}
+
+
+% Abstract in English
+\begin{abstract}
+  Enter the abstract in English.
+
+\end{abstract}
+
+\begin{keywords}
+  the first keyword; the second keyword; the third keyword
+\end{keywords}
+
+
+%--- PRIVITCI / APPENDIX -------------------------------------------------------
+
+% Sva poglavlja koja slijede će biti označena slovom i riječi privitak / All following chapters will be denoted with an appendix and a letter
+\backmatter
+
+\chapter{The Code}
+
+TODO Appendix ako bude potrebe
+
+
+\end{document}
