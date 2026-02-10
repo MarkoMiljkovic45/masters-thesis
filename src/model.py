@@ -81,8 +81,7 @@ class FinancialLstm(L.LightningModule):
             num_layers: int = 2,
             dropout: float = 0.2,
             learning_rate: float = 1e-4,
-            weight_decay: float = 1e-5,
-            lr_patience: int = 4
+            weight_decay: float = 1e-5
     ):
         super().__init__()
 
@@ -158,7 +157,7 @@ class FinancialLstm(L.LightningModule):
             optimizer,
             mode='min',
             factor=0.5,
-            patience=self.hparams.lr_patience
+            patience=2
         )
 
         frequency = getattr(self.trainer, 'check_val_every_n_epoch', 1) if hasattr(self, 'trainer') else 1
@@ -183,10 +182,9 @@ class FinancialLstmMse(FinancialLstm):
             num_layers: int = 2,
             dropout: float = 0.2,
             learning_rate: float = 1e-4,
-            weight_decay: float = 1e-5,
-            lr_patience: int = 4
+            weight_decay: float = 1e-5
     ):
-        super().__init__(input_size, hidden_size, num_layers, dropout, learning_rate, weight_decay, lr_patience)
+        super().__init__(input_size, hidden_size, num_layers, dropout, learning_rate, weight_decay)
         self.save_hyperparameters()
         self.train_metric = MeanSquaredError()
         self.val_metric = MeanSquaredError()
@@ -226,10 +224,9 @@ class FinancialLstmNll(FinancialLstm):
             num_layers: int = 2,
             dropout: float = 0.2,
             learning_rate: float = 1e-4,
-            weight_decay: float = 1e-5,
-            lr_patience: int = 4
+            weight_decay: float = 1e-5
     ):
-        super().__init__(input_size, hidden_size, num_layers, dropout, learning_rate, weight_decay, lr_patience)
+        super().__init__(input_size, hidden_size, num_layers, dropout, learning_rate, weight_decay)
         self.save_hyperparameters()
         self.train_metric = MultivariateGaussianNLLLoss()
         self.val_metric = MultivariateGaussianNLLLoss()
@@ -275,10 +272,9 @@ class FinancialLstmCombined(FinancialLstm):
             dropout: float = 0.2,
             learning_rate: float = 1e-4,
             weight_decay: float = 1e-5,
-            lr_patience: int = 4,
-            mse_weight: float = 1e2,
+            mse_weight: float = 1e2
     ):
-        super().__init__(input_size, hidden_size, num_layers, dropout, learning_rate, weight_decay, lr_patience)
+        super().__init__(input_size, hidden_size, num_layers, dropout, learning_rate, weight_decay)
         self.save_hyperparameters()
 
         self.train_mse = MeanSquaredError()

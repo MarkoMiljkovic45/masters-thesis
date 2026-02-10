@@ -1,3 +1,5 @@
+import hashlib
+import json
 from collections import defaultdict
 from pathlib import Path
 
@@ -161,7 +163,32 @@ class FinancialLstmDataModule(L.LightningDataModule):
         path = self.data_dir / filename
         return torch.load(path) if path.exists() else None
 
+    def _compute_hparams_hash(self):
+        hparams_dict = {
+            'lookback_window': self.hparams.lookback_window,
+            'target_window': self.hparams.target_window,
+            'stride': self.hparams.stride,
+            'prediction_task': self.hparams.prediction_task,
+            'interaction_only': self.hparams.interaction_only,
+        }
+        hparams_str = json.dumps(hparams_dict, sort_keys=True)
+        return hashlib.sha256(hparams_str.encode()).hexdigest()
+
     def prepare_data(self):
+        hparams_hash = self._compute_hparams_hash()
+        datasets_dir = self.data_dir / 'datasets'
+        datasets_dir.mkdir(parents=True, exist_ok=True)
+        hash_file = datasets_dir / 'hparams_hash.txt'
+        dataset_file = datasets_dir / 'dataset.pt'
+
+        if hash_file.exists() and dataset_file.exists():
+            with open(hash_file, 'r') as f:
+                stored_hash = f.read().strip()
+
+            if stored_hash == hparams_hash:
+                print("Dataset parameters unchanged, skipping data preparation")
+                return
+
         r_stocks = torch.load(self.data_dir / 'stocks.pt')
         r_market = torch.load(self.data_dir / 'market.pt')
         alphas = self._load_if_exists('alphas.pt')
@@ -187,9 +214,9 @@ class FinancialLstmDataModule(L.LightningDataModule):
         y = _append_feature(y, betas)
 
         dataset = TensorDataset(X, y, target_factor, target_inv_psi)
-        datasets_dir = self.data_dir / 'datasets'
-        datasets_dir.mkdir(parents=True, exist_ok=True)
-        torch.save(dataset, datasets_dir / 'dataset.pt')
+        torch.save(dataset, dataset_file)
+        with open(hash_file, 'w') as f:
+            f.write(hparams_hash)
 
     def setup(self, stage: str):
         dataset_path = self.data_dir / 'datasets' / 'dataset.pt'
@@ -214,7 +241,7 @@ class FinancialLstmDataModule(L.LightningDataModule):
         return DataLoader(self.val_dataset, batch_size=1, num_workers=2, shuffle=False, pin_memory=True)
 
     def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=1, num_workers=1, shuffle=False)
+        return DataLoader(self.test_dataset, batch_size=1, num_workers=0, shuffle=False)
 
     def teardown(self, stage: str):
         if stage == 'cleanup':

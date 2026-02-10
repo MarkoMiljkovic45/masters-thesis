@@ -41,11 +41,6 @@ OmegaConf.register_new_resolver(
     lambda interaction_only: 3 if interaction_only else 5
 )
 
-OmegaConf.register_new_resolver(
-    "lr_patience_from_epochs",
-    lambda max_epochs: max_epochs // 16 + 2
-)
-
 
 def get_model_class(module_class_name: str):
     """
@@ -131,8 +126,7 @@ def main(cfg: DictConfig):
         'hidden_size': cfg.model.hidden_size,
         'num_layers': cfg.model.num_layers,
         'dropout': cfg.model.dropout,
-        'learning_rate': cfg.model.learning_rate,
-        'lr_patience': cfg.model.lr_patience,
+        'learning_rate': cfg.model.learning_rate
     }
 
     # Add mse_weight parameter only for FinancialLstmCombined

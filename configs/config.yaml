@@ -12,6 +12,8 @@ logger:
   version: ${loss.name}_${model.name}_lr${model.learning_rate}_${trainer.name}
   default_hp_metric: false
 
+checkpoint: null
+
 hydra:
   launcher:
     n_jobs: 1
