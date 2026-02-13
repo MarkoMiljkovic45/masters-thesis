@@ -489,8 +489,45 @@ $\mathbf{R}_F$ biti će detaljnije objašnjen u potpoglavlju \ref{sec:model-dubo
 \section{Duboko učenje}
 \label{sec:duboko-ucenje}
 
+Duboko učenje predstavlja podpodručje strojnog učenja koje se ističe u rješavanju problema s
+visokom dimenzionalnošću podataka, kao što su računalni vid, obrada prirodnog jezika,
+financijska te slične složene domene. Temeljna ideja dubokog učenja je izgradnja hijerarhijskih,
+složenih reprezentacija podataka, koje se dobivaju primjenom uzastopnih nelinearnih transformacija
+modeliranih pomoću višeslojnih neuronskih mreža. Osnovni element svake neuronske mreže je umjetni neuron.
+Za zadani ulazni vektor $\mathbf{x} = (x_1, \dots, x_n)^\intercal$, izlaz neurona definiramo jednadžbom:
+\begin{equation}
+  h = f\left(\mathbf{w}^\intercal\mathbf{x} + b\right)
+\end{equation}
+gdje je $\mathbf{w} = (w_1, \dots, w_n)^\intercal$ vektor težina neurona koji odrežuje doprinos
+pojedine komponente ulaznog vektora, a skalar $b$ omogućuje dodatni pomak linearne kombinacije ulaza.
+Aktivacijska funkcija $f$ uvodi nelinearnost u model, čime se omogućuje aproskimacija složenih i
+nelinearnih odnosa u podatcima.
+
+Neke od najčešće korištenih aktivacijskih funkcija su sigmoidalna funkcija i hiperbolni tangens.
+Obje su nelinearne, monotono rastuće i kontinuirano diferencijabilne, što je ključno svojstvo u
+procesu učenja neuronskih mreža metodama koje se temelje na gradijentnom spustu. Sigmoidalna funkcija
+ima kodomenu u intervalu $\left\langle0,1\right\rangle$, dok hiperbolni tangens poprima vrijednosti u
+intervalu $\left\langle-1,1\right\rangle$, pri čemu obje funckije imaju karakterističan S-oblik.
+
+Među najznačajnijim arhitekturama dubokih modela ističu se duboke unaprijende mreže, konvolucijske
+neuronske mreže te povratne neuronske mreže. Svaka od navedenih arhitektura prilagođena je specifičnim 
+vrstama podataka i problemima.
+
+Odabir odgovarajuće arhitekture ovisi o prirodi i strukturi odabranih podataka. U okviru ovog rada
+koristit ćemo posebnu vrstu povratnih neuronskih mreža koje nazivamo mreže s dugoročnom memorijom
+\engl{ long short-term memory, LSTM}. LSTM mreže dizajnirane su kako bi omogućile učenje dugoročnih
+ovisnosti u sekvencijalnim podatcima, zbog čega se često primjenjuju u modeliranju vremenskih nizova.
+
+\subsection{Povratne neuronske mreže}
+\label{subsec:povratne-mreze}
+
+TODO Općenito objašnjenje povratnih neuronskih mreža
 
 
+\subsection{LSTM mreže}
+\label{subsec:lstm-mreze}
+
+TODO Općenito objašnjenje LSTM mreža
 
 
 %-------------------------------------------------------------------------------
@@ -500,7 +537,7 @@ $\mathbf{R}_F$ biti će detaljnije objašnjen u potpoglavlju \ref{sec:model-dubo
 
 \section{Podatci}
 \label{sec:podatci}
-TODO Odakle nam podatci, kako su procesirani, povezati s definiranim varijablama
+TODO Objašnjenje odakle nam dolaze podatci, kako su procesirani te povezat s definiranim varijablama
 
 
 \section{Model dubokog učenja}
