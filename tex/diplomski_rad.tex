@@ -4,6 +4,8 @@
 
 
 % Ovdje dodati pakete npr. \usepackage{blindtext}
+\usepackage{algorithm}
+\usepackage{algorithmic}
 
 
 %--- PODACI O RADU / THESIS INFORMATION ----------------------------------------
@@ -43,7 +45,7 @@
 
 % Zadatak se ubacuje iz vanjske datoteke / Thesis assignment is included from external file
 % Upiši ime PDF datoteke preuzete s FERWeb-a / Enter the filename of the PDF downloaded from FERWeb
-\zadatak{filename.pdf}
+\zadatak{zadatak.pdf}
 
 
 %--- ZAHVALE / ACKNOWLEDGMENT --------------------------------------------------
@@ -66,7 +68,7 @@
 \chapter{Uvod}
 \label{pog:uvod}
 
-TODO Uvod, ovdje ćemo testirati citiranje \cite{johnson1998,tsay2010}.
+TODO Uvod.
 
 %-------------------------------------------------------------------------------
 \chapter{Metodologija}
@@ -76,55 +78,228 @@ Ovo poglavlje pokriva teoretsku osnovu potrebnu za razumijevanje implementiranog
 samu arhitekturu modela. Prvo ćemo definirati varijable pomoću kojih ćemo kasnije oblikovati naše
 podatke. Zatim ćemo proći osnove faktorskih modela i razmotriti kako jednofaktorski model može objasniti
 povrate imovina. Na kraju ćemo opisati sam model dubokog učenja, njegovu arhitekturu i funckije cilja
-koje se koriste u ovom radu.
+koje se koriste u ovom radu. !TODO Revidirat nakon ostatka poglavlja!
 
-\section{Varijable i povrati imovine}
-\label{sec:varijable}
+\section{Povrati imovine}
+\label{sec:povrati}
 
-Radovi koji se bave financijama uglavnom koriste povrate umijesto samih cijena imovine. Postoje dva glavna
-razloga za to. Prvi je to što povrati sažimaju kretanja cijena te ih stavljaju na jednaku i usporedivu skalu.
-Drugi se odnosi na povoljnija statistička svojstva povrata u odnosu na cijene. Međutim postoji više načina za
-definirati povrate.
+Vrijednosni papiri predstavljaju financijske instrumente koji potvrđuju određena imovinska ili
+druga prava njihova vlasnika, poput prava na udio u vlasništvu poduzeća (dionice) ili prava na
+povrat uloženih sredstava uz kamatu (obveznice). Njima se trguje na organiziranim tržištima kapitala,
+poput burzi, gdje se kupnja i prodaja odvijaju putem ovlaštenih posrednika, a cijene se formiraju na
+temelju ponude i potražnje. Tržišna cijena vrijednosnog papira u svakom trenutku odražava ravnotežu
+između kupaca i prodavatelja, pri čemu se svaka realizirana transakcija bilježi kao nova referentna cijena.
+Tržišni indeksi predstavljaju promjene vrijednosti grupe dionica ili drugih financijskih
+instrumenata. Služe kao mjerilo performansi tržišta ili određenog segmenta tržišta \cite{anafin02}.
 
-Nek je $P_t$ cijena imovine u trenutku $t$. U nastavku ćemo razmotriti definicije povrata koji se koriste
-kroz ovaj rad.
+Kako bi se omogućila analiza kretanja cijena kroz vrijeme, kontinuirani tok transakcijskih podataka
+uzorkuje se u diskretnim vremenskim intervalima (npr. minute, sati, dani), čime se dobivaju vremenski
+nizovi cijena koji služe kao temelj za statističku analizu i modeliranje. Slika \ref{fig:crobex-price}
+prikazuje kretanje dnevnih cijena CROBEX indeksa u zadnjih 5 godina.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=15cm]{img/crobex_price_plot.png}
+\caption{Kretanje cijene CROBEX indeksa}
+\label{fig:crobex-price}
+\end{figure}
+
+U ovom radu koristit ćemo povrate umijesto samih cijena imovina. Postoje dva glavna razloga za to.
+Prvi je to što povrati sažimaju kretanja cijena te ih stavljaju na jednaku i usporedivu skalu.
+Drugi se odnosi na povoljnija statistička svojstva povrata u odnosu na cijene. Postoji više načina za
+definirati povrate \cite{campbell1997}.
 
 
-\subsection{Jednostavni (artimetički) povrati}
-\label{subsec:artimeticki}
+\subsubsection{Jednostavni (artimetički) povrati}
+\label{subsubsec:artimeticki}
 
-Ako imovinu posjedujemo od trenutka $t-1$ do trenutka $t$, dobivamo artimetički \emph{bruto} povrat:
-\begin{equation}
-  1 + R_t = \frac{P_t}{P_{t-1}} \mspace{48mu} \text{ili} \mspace{48mu} P_t = P_{t-1}(1+R_t)
-\label{eq:artimeticki_bruto}
-\end{equation}
-
-Odgovarajući artimetički \emph{neto} povrat dan je izrazom:
-\begin{equation}
-  R_t = \frac{P_t}{P_{t-1}} - 1 = \frac{P_t - P_{t-1}}{P_{t-1}}
-\label{eq:artimeticki_neto}
-\end{equation}
-
-Ukoliko imovinu držimo kroz $T$ perioda ukupni artimetički \emph{bruto} povrat dobivamo izrazom:
+Nek je $P_t$ cijena imovine u trenutku $t$. Ako imovinu posjedujemo od trenutka $t-1$ do trenutka $t$,
+ostvareni artimetički povrat dobivamo izrazom:
 \begin{align}
+  1 + R_t &= \frac{P_t}{P_{t-1}} \label{eq:artimeticki_gross} \\[12pt]
+  R_t &= \frac{P_t}{P_{t-1}} - 1 = \frac{P_t - P_{t-1}}{P_{t-1}} \label{eq:artimeticki}
+\end{align}
+
+Ukoliko imovinu držimo kroz $T$ perioda ukupni artimetički povrat dobivamo ukamaćivanjem artimetičkih
+povrata u vremenu \cite{tsay2010}:
+\begin{equation} \label{eq:artimeticki-ukamacivanje}
+\begin{split}
   1 + R_{total} = \frac{P_T}{P_1} &= \frac{P_T}{P_{T-1}} \times \frac{P_{T-1}}{P_{T-2}} \times ... \times \frac{P_2}{P_1} \\
   &= (1+R_T)(1+R_{T-1})\ ...\ (1+R_1) \\
   &= \prod_{t=1}^{T}(1 + R_t).
-\end{align}
+\end{split}
+\end{equation}
 
 
-\subsection{Kontinuirani (logaritamski) povrati}
-\label{subsec:logaritamski}
+\subsubsection{Kontinuirani (logaritamski) povrati}
+\label{subsubsec:logaritamski}
 
-Prirodni logaritam artimetičkog \emph{bruto} povrata (\ref{eq:artimeticki_bruto}) daje nam kontinuirani
-odnosno logaritamski povrat:
+Prirodni logaritam artimetičkog povrata (\ref{eq:artimeticki_gross}) je logaritamski povrat:
 \begin{equation}
-  r_t = ln(1 + R_t) = ln\frac{P_t}{P_{t-1}} = p_t - p_{t-1},
+  r_t = \ln(1 + R_t) = \ln\frac{P_t}{P_{t-1}} = p_t - p_{t-1},
 \label{eq:logartiamski}
 \end{equation}
-gdje $p_t = ln(P_t)$. 
+gdje $p_t = \ln(P_t)$.
 
-Jedan od načina za modeliranje ovakvih podataka je pomoću faktorskih modela.
+Razmotrimo zatim ukamaćivanje logaritamskih povrata u vremenu:
+\begin{equation} \label{eq:logaritamski-ukamacivanje}
+\begin{split}
+  r_{total} &= \ln(1 + R_{total}) = \ln[(1+R_T)(1+R_{T-1})\ ...\ (1+R_1)] \\
+  &= \ln(1+R_T) + \ln(1+R_{T-1}) +\ ...\ + \ln(1+R_1) \\
+  &= r_T + r_{T-1} + \ ... \ + r_1 \\
+  &= \sum_{t=1}^{T}r_t
+\end{split}
+\end{equation}
+Ukamaćivanje logaritamski povrata može se ostvariti zbrajanjem pojedinačnih logaritamskih
+povrata. To svojstvo zovemo \emph{aditivnost u vremenu}. Logaritmski povrati također
+posjeduju poželjna statistička svojstva \cite{tsay2010}. Za male magnitude vrijedi
+$r_t \approx R_t$. Ova aproksimacija je korisna kada se razmatraju kratki vremenski
+intervali \cite{anafin02}. Slika \ref{fig:crobex-returns} prikazuje dnevne artimetičke
+i logaritamske povrate CROBEX indeksa u zadnih 5 godina. Sa slike vidimo da nema značajne
+razlike između artimetičkih i logaritamskih povrata jer su povrati izračunati na kratkom
+odnosno dnevnom vremenskom intervalu.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=15cm]{img/crobex_returns_plot.png}
+\caption{Artimetički i logaritamski povrati CROBEX indeksa}
+\label{fig:crobex-returns}
+\end{figure}
+
+
+\subsubsection{Povrat portfelja}
+\label{subsubsec:portfelj}
+
+Artimetički povrat portfelja koji se sastoji od $N$ vrijednosnica je otežana artimetička sredina
+\engl{ weighted average} artimetičkih povrata vrijednosnica, gdje je težina \engl{ weight} pojedine
+vrijednosnice njezin udio u vrijednosti portfelja \cite{tsay2010}.
+
+Nek je $p$ portfelj kojem je $w_i$ ponder vrijednosnice $i$. Tada je artimetički povrat portfelja $p$ u
+trenutku $t$ dan izrazom:
+\begin{equation}
+  R_{p,t} = \sum_{i=1}^{N}w_iR_{i,t},
+\label{eq:portfelj}
+\end{equation}
+gdje je $R_{i,t}$ artimetički povrat vrijednosnice $i$ u trenutku $t$. Ovo svojstvo nazivamo \emph{aditivnost
+u prostoru vrijednosnica}. Logaritamski povrati ne posjeduju to svojstvo.
+
+
+\subsubsection{Višak povrata}
+\label{subsubsec:excess}
+
+Višak povrata \engl{ excess return} predstavlja razliku između ostvarenog povrata određene imovine
+i referentnog, bezrizičnog povrata, te mjeri dodatnu kompenzaciju koju investitor ostvaruje za
+preuzimanje rizika. Kao referentni povrat najčešće se koriste prinosi na državne obveznice visoke
+kreditne kvalitete i kratkog dospijeća, jer se smatra da nose zanemariv rizik \cite{tsay2010}.
+
+\begin{equation}
+  R_t^{excess} = R_t - R_f
+\label{eq:excess}
+\end{equation}
+
+
+\section{Statistički modeli povrata}
+\label{sec:statisticki}
+
+Prije nego razmotrimo konkretne statističke modele povrata, potrebno je ukratko opisati osnovne
+distribucije na kojima će se temeljiti daljnja analiza te načine estimacije njihovih parametara.
+
+\subsubsection{Normalna distribucija}
+\label{subsubsec:normal}
+
+Normalna distribucija jedan je od najčešće korištenih probabilističkih modela u statistici i
+financijama zbog svoje matematičke jednostavnosti i dobrih teorijskih svojstava.
+Ako slučajna varijabla $X$ slijedi normalnu distribuciju sa sredinom $\mu$ i varijancom $\sigma^2$,
+tada njezina funkcija gustoće ima oblik \cite{johnson1994}:
+\begin{equation}
+  f(x) = \frac{1}{\sqrt{2\pi\sigma^2}} \exp\left(-\frac{(x-\mu)^2}{2\sigma^2}\right).
+\end{equation}
+
+Za osmotreni uzorak $\{x_1, x_2, \dots, x_n\}$, procjena sredine dana je aritmetičkom sredinom
+\begin{equation}
+  \hat{\mu} = \frac{1}{n}\sum_{i=1}^{n} x_i,
+\end{equation}
+dok se varijanca procjenjuje izrazom:
+\begin{equation}
+  \hat{\sigma}^2 = \frac{1}{n}\sum_{i=1}^{n} (x_i - \hat{\mu})^2.
+\end{equation}
+
+
+\subsubsection{Lognormalna distribucija}
+\label{subsubsec:lognormal}
+
+Lognormalna distribucija koristi se za modeliranje slučajnih varijabli čiji je logaritam
+normalno distribuiran. Ako postoji broj $a$ takav da $Y=\ln(X - a)$ prati normalnu
+distribuciju, slučajna varijabla $X$ tada slijedi lognormalnu distribuciju. Kako bi to vrijedilo,
+vjerojatnost da slučajna varijabla $X$ poprimi vrijednost manju od $a$ mora biti jednaka nuli.
+Ako vrijedi $Y \sim \mathcal{N}(\mu, \sigma^2)$, tada $X$ ima gustoću:
+\begin{equation}
+  f(x) = \frac{1}{(x-a)\sigma\sqrt{2\pi}} \exp\left[-\frac{(\ln(x - a) - \mu)^2}{2\sigma^2}\right]
+  , \quad x > a.
+\label{eq:lognormalna-gustoca}
+\end{equation}
+
+Sredina i varijanca lognormalne distribucije dane su izrazima
+\begin{equation}
+  E[X] = e^{\mu + \frac{\sigma^2}{2}}, \quad
+  \mathrm{Var}[X] = (e^{\sigma^2}-1)e^{2\mu+\sigma^2}.
+\end{equation}
+
+Procjena parametara provodi se logaritamskom transformacijom uzorka, nakon čega se primjenjuju
+standardne procjene za normalnu distribuciju \cite{johnson1994}.
+
+
+\subsubsection{Studentova t distribucija}
+\label{subsubsec:studentt}
+
+Studentova t distribucija predstavlja generalizaciju normalne distribucije s dodatnim parametrom
+broja stupnjeva slobode $\nu$, koji kontrolira debljinu repova. Za manje vrijednosti $\nu$
+distribucija ima izraženije repove, čime omogućuje robusnije modeliranje ekstremnih vrijednosti.
+
+Gustoća Studentove t distribucije sa sredinom $\mu$, varijancom $\sigma^2$ i $\nu$ stupnjeva
+slobode ima oblik:
+\begin{equation}
+f(x) = \frac{\Gamma\left(\frac{\nu+1}{2}\right)}{\Gamma\left(\frac{\nu}{2}\right)\sqrt{\nu\pi\sigma^2}}
+\left(1 + \frac{(x-\mu)^2}{\nu\sigma^2}\right)^{-\frac{\nu+1}{2}}.
+\end{equation}
+
+Zbog složenog oblika funckije gustoće, ne postoji izravan način za izračun njenih prametara.
+Za procjenu parametara t distribucije koriste se metode procjene najveće izglednosti \engl{ maximum
+likelihood estimation}.
+
+
+\subsubsection{Statistička svojstva povrata}
+
+U statističkoj analizi financijskih vremenskih nizova često se polazi od pretpostavke da su aritmetički
+povrati nezavisne i jednako distribuirane slučajne varijable s normalnom distribucijom,
+konstantnom sredinom i varijancom, čime se značajno pojednostavljuje teorijska obrada i izvođenje
+analitičkih rezultata. Međutim, takva pretpostavka suočava se s nizom ograničenja: aritmetički povrati
+imaju donju granicu od $-1$, dok normalna distribucija nema ograničenja po realnoj osi,
+višeperiodni povrati ne zadržavaju normalnu distribuciju zbog multiplikativne prirode
+\ref{eq:artimeticki-ukamacivanje}, a empirijski podaci često pokazuju odstupanja od normalnosti.
+
+Alternativno možemo pretpostaviti da su logaritamski povrati nezavisno i identično normalno
+distribuirani sa sredinom $\mu$ i varijancom $\sigma^2$. S tom pretpostavkom impliciramo da
+su aritmetički povrati nezavisno i identično lognormalno distribuirani.
+
+Ovaj pristup ima povoljnija matematička svojstva jer su zbrojevi logaritamskih povrata kroz više
+razdoblja također normalno distribuirani \ref{eq:logaritamski-ukamacivanje}, a pritom se prirodno
+zadovoljava donja granica aritmetičkog povrata (\ref{eq:lognormalna-gustoca}). Unatoč tim prednostima,
+ni pretpostavka lognormalnosti u potpunosti ne opisuje realna tržišna kretanja, budući da stvarni
+financijski povrati često pokazuju deblje repove distribucije i veću učestalost ekstremnih vrijednosti nego
+što to predviđa normalna distribucija.
+
+Slika \ref{fig:crobex-returns-pdf} prikazuje funkcije
+gustoće vjerojatnosti dnevnih artimetičkih i logaritamskih povrata CROBEX indeksa u zadnjih
+5 godina. Također je prikazana gustoća normalne distribucije sa sredinom i varijancom procjenjenom
+iz uzoraka povrata.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=15cm]{img/crobex_pdfs.png}
+\caption{Distribucija dnevnih artimetičkih i logaritamskih povrata CROBEX indeksa}
+\label{fig:crobex-returns-pdf}
+\end{figure}
 
 
 \section{Faktorski modeli}
@@ -133,10 +308,16 @@ Jedan od načina za modeliranje ovakvih podataka je pomoću faktorskih modela.
 TODO Objasnjenje faktorskih modela
 
 
-\section{Jednofaktorski model povrata}
-\label{sec:jednofaktorski}
+\subsection{Jednofaktorski model povrata}
+\label{subsec:jednofaktorski}
 
 TODO Objašnjenje jednofaktorskog modela
+
+
+\subsubsection{Procjena parametara jednofaktorskog modela}
+\label{subsubsec:jednofaktorski-estimacija}
+
+MLE estimacija parametara pomoću OLS
 
 
 \section{LSTM Model}
@@ -144,6 +325,14 @@ TODO Objašnjenje jednofaktorskog modela
 
 TODO Objasniti arhitekturu našeg modela, različiti pristupi
 TOOD Možda će biti potrebno raščlanit po funkcijama cilja
+
+\subsubsection{Multivariatni povrati}
+\label{subsubsec:multivariatni}
+
+Nek je $\mathbf{r}_t = (r_{1,t}, \dots, r_{N,t})^T$ vektor log povrata $N$ vrijednosnica u trenutku $t$.
+U ovom radu zanimat će nas zajednička distribucija ${\mathbf{r}_t}_{t=1}^{T}$, a posebnu pažnju obratit
+ćemo na funkciju uvjetne distribucije
+$F(\mathbf{r}_T, \dots,\mathbf{r}_{T-k}|\mathbf{r}_{T-k-1}, \dots, \mathbf{r}_1, \boldsymbol{\theta})$
 
 
 %-------------------------------------------------------------------------------
