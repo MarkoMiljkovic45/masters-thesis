@@ -177,10 +177,10 @@ vrijednosnice njezin udio u vrijednosti portfelja \cite{tsay2010}.
 Nek je $p$ portfelj kojem je $w_i$ ponder vrijednosnice $i$. Tada je artimetički povrat portfelja $p$ u
 trenutku $t$ dan izrazom:
 \begin{equation}
-  R_{p,t} = \sum_{i=1}^{N}w_iR_{i,t},
+  R_{pt} = \sum_{i=1}^{N}w_iR_{it},
 \label{eq:portfelj}
 \end{equation}
-gdje je $R_{i,t}$ artimetički povrat vrijednosnice $i$ u trenutku $t$. Ovo svojstvo nazivamo \emph{aditivnost
+gdje je $R_{it}$ artimetički povrat vrijednosnice $i$ u trenutku $t$. Ovo svojstvo nazivamo \emph{aditivnost
 u prostoru vrijednosnica}. Logaritamski povrati ne posjeduju to svojstvo.
 
 
@@ -210,18 +210,18 @@ distribucije na kojima će se temeljiti daljnja analiza te načine estimacije nj
 Normalna distribucija jedan je od najčešće korištenih probabilističkih modela u statistici i
 financijama zbog svoje matematičke jednostavnosti i dobrih teorijskih svojstava.
 Ako slučajna varijabla $X$ slijedi normalnu distribuciju sa sredinom $\mu$ i varijancom $\sigma^2$,
-tada njezina funkcija gustoće ima oblik \cite{johnson1994}:
+tada njezina funkcija gustoće ima oblik \cite{johnson1994vol1}:
 \begin{equation}
   f(x) = \frac{1}{\sqrt{2\pi\sigma^2}} \exp\left(-\frac{(x-\mu)^2}{2\sigma^2}\right).
 \end{equation}
 
 Za osmotreni uzorak $\{x_1, x_2, \dots, x_n\}$, procjena sredine dana je aritmetičkom sredinom
 \begin{equation}
-  \hat{\mu} = \frac{1}{n}\sum_{i=1}^{n} x_i,
+  \widehat{\mu} = \frac{1}{n}\sum_{i=1}^{n} x_i,
 \end{equation}
 dok se varijanca procjenjuje izrazom:
 \begin{equation}
-  \hat{\sigma}^2 = \frac{1}{n}\sum_{i=1}^{n} (x_i - \hat{\mu})^2.
+  \widehat{\sigma^2} = \frac{1}{n}\sum_{i=1}^{n} (x_i - \widehat{\mu})^2.
 \end{equation}
 
 
@@ -246,7 +246,7 @@ Sredina i varijanca lognormalne distribucije dane su izrazima
 \end{equation}
 
 Procjena parametara provodi se logaritamskom transformacijom uzorka, nakon čega se primjenjuju
-standardne procjene za normalnu distribuciju \cite{johnson1994}.
+standardne procjene za normalnu distribuciju \cite{johnson1994vol1}.
 
 
 \subsubsection{Studentova t distribucija}
@@ -265,7 +265,7 @@ f(x) = \frac{\Gamma\left(\frac{\nu+1}{2}\right)}{\Gamma\left(\frac{\nu}{2}\right
 
 Zbog složenog oblika funckije gustoće, ne postoji izravan način za izračun njenih prametara.
 Za procjenu parametara t distribucije koriste se metode procjene najveće izglednosti \engl{ maximum
-likelihood estimation}.
+likelihood estimation} \cite{johnson1994vol2}.
 
 
 \subsubsection{Statistička svojstva povrata}
@@ -276,23 +276,29 @@ konstantnom sredinom i varijancom, čime se značajno pojednostavljuje teorijska
 analitičkih rezultata. Međutim, takva pretpostavka suočava se s nizom ograničenja: aritmetički povrati
 imaju donju granicu od $-1$, dok normalna distribucija nema ograničenja po realnoj osi,
 višeperiodni povrati ne zadržavaju normalnu distribuciju zbog multiplikativne prirode
-\ref{eq:artimeticki-ukamacivanje}, a empirijski podaci često pokazuju odstupanja od normalnosti.
+(\ref{eq:artimeticki-ukamacivanje}), a empirijski podaci često pokazuju odstupanja od normalnosti.
 
 Alternativno možemo pretpostaviti da su logaritamski povrati nezavisno i identično normalno
 distribuirani sa sredinom $\mu$ i varijancom $\sigma^2$. S tom pretpostavkom impliciramo da
 su aritmetički povrati nezavisno i identično lognormalno distribuirani.
-
 Ovaj pristup ima povoljnija matematička svojstva jer su zbrojevi logaritamskih povrata kroz više
-razdoblja također normalno distribuirani \ref{eq:logaritamski-ukamacivanje}, a pritom se prirodno
+razdoblja također normalno distribuirani (\ref{eq:logaritamski-ukamacivanje}), a pritom se prirodno
 zadovoljava donja granica aritmetičkog povrata (\ref{eq:lognormalna-gustoca}). Unatoč tim prednostima,
 ni pretpostavka lognormalnosti u potpunosti ne opisuje realna tržišna kretanja, budući da stvarni
 financijski povrati često pokazuju deblje repove distribucije i veću učestalost ekstremnih vrijednosti nego
-što to predviđa normalna distribucija.
+što to predviđa normalna distribucija \cite{tsay2010}.
 
-Slika \ref{fig:crobex-returns-pdf} prikazuje funkcije
-gustoće vjerojatnosti dnevnih artimetičkih i logaritamskih povrata CROBEX indeksa u zadnjih
-5 godina. Također je prikazana gustoća normalne distribucije sa sredinom i varijancom procjenjenom
-iz uzoraka povrata.
+Kako bismo bolje obuhvatili ta empirijska svojstva, možemo koristiti studentovu $t$-distribuciju.
+Slika \ref{fig:crobex-returns-pdf} prikazuje distribuciju gustoće vjerojatnosti dnevnih
+artimetičkih i logaritamskih povrata CROBEX indeksa u zadnjih 5 godina.
+Također je prikazana distribucija gustoće vjerojatnosti normalne distribucije i
+studentove $t$-distribucije s pet stupnjeva slobode \footnote{Biramo pet stupnjeva slobode kako bi
+imali konačna prva četiri momenta distribucije. Za više informacija pogledaj
+\cite[Chapter 28.]{johnson1994vol2}}. Parametri $\mu$ i $\sigma^2$ za normalnu i $t_5$-distribuciju
+procjenjeni su iz artimetičkih povrata za lijevi graf i logaritamskih povrata za desni graf.
+Sa slike vidimo kako $t_5$-distribucija puno vijernije modelira distribuciju povrata. Također vidimo
+da su, zbog male magnitude dnevnih povrata, artimetički i logaritamski povrati gotovo identično
+distribuirani.
 
 \begin{figure}[htb]
 \centering
@@ -302,11 +308,91 @@ iz uzoraka povrata.
 \end{figure}
 
 
+\subsubsection{Slučajni vektori}
+\label{subsubsec:slucajni-vektori}
+
+Nek je $\mathbf{X} = (X_1, \dots, X_p)$ slučajni vektor $p$ slučajnih varijabli.
+Tada su vektor sredina i kovarijacijska matrica dani izrazima:
+\begin{align}
+  E(\mathbf{X}) &= \boldsymbol{\mu}_X = \left[E(X_1), \dots, E(X_p)\right]^\intercal \\
+  \mathrm{Cov}(\mathbf{X}) &= \mathbf{\Sigma}_X =
+  E\left[\left(\mathbf{X} - \boldsymbol{\mu}_X\right)
+  \left(\mathbf{X} - \boldsymbol{\mu}_X\right)^\intercal\right]\text{,}
+\end{align}
+uz uvijet da dana očekivanj postoje. Neka su $\left\{\mathbf{x_1}, \dots, \mathbf{x_T}\right\}$
+realizacije slučajnog vektora $\mathbf{X}$. Tada su uzoračka sredina i kovarijacijska matrica dane
+izrazima \cite{tsay2010}:
+\begin{equation}
+  \widehat{\boldsymbol{\mu}}_x = \frac{1}{T}\sum_{t=1}^{T}\mathbf{x}_t\text{,} \qquad
+  \widehat{\mathbf{\Sigma}}_x = \frac{1}{T-1}\sum_{t=1}^{T}\left(\mathbf{x}_t - \widehat{\boldsymbol{\mu}}_x\right)
+  \left(\mathbf{x}_t - \widehat{\boldsymbol{\mu}}_x\right)^\intercal\text{.} 
+\end{equation}
+
+Ako pretpostavimo da slučajni vektor $\mathbf{X}$ dolazi is multivariatne normalne distribucije s
+vektorom sredina $\boldsymbol{\mu}$ i kovarijaciskom matricom $\mathbf{\Sigma}$, tada je funkcija
+izglednosti uzorka \engl{ likelihood function} dana jednadžbom \cite{statlect-likelihood}:
+\begin{equation}
+  \mathcal{L}\left(\boldsymbol{\mu}, \mathbf{\Sigma}; \mathbf{x_1}, \dots, \mathbf{x_T}\right) =
+  \left(2\pi\right)^{-\frac{pT}{2}}|\det\left(\mathbf{\Sigma}\right)|^{-\frac{T}{2}}
+  \exp\left(-\frac{1}{2}\sum_{t=1}^{T}\left(\mathbf{x}_t - \boldsymbol{\mu}\right)^\intercal
+  \mathbf{\Sigma}^{-1}\left(\mathbf{x}_t - \boldsymbol{\mu}\right)\right)\text{.}
+\end{equation}
+S obzirom da taj oblik funckije izglednosti nije najprikladniji za računanje računalom iskazat ćemo i
+njezin logaritamski oblik \engl{ log-likelihood function} te ćemo zamijeniti argument $\mathbf{\Sigma}$
+s $\mathbf{\Sigma}^{-1}$:
+\begin{equation} \label{eq:log-likelihood}
+\begin{split}
+  \ln\mathcal{L}&\left(\boldsymbol{\mu}, \mathbf{\Sigma}^{-1}; \mathbf{x_1}, \dots, \mathbf{x_T}\right) =\\
+  &= \frac{1}{2}\left(
+    -pT\ln(2\pi) + T\ln[\det(\mathbf{\Sigma}^{-1})] - \sum_{t=1}^{T}\left(\mathbf{x}_t - \boldsymbol{\mu}\right)^\intercal
+    \mathbf{\Sigma}^{-1}\left(\mathbf{x}_t - \boldsymbol{\mu}\right)
+  \right)\text{.}
+\end{split}
+\end{equation}
+
+
 \section{Faktorski modeli}
 \label{sec:faktorski}
 
-TODO Objasnjenje faktorskih modela
+U analizi povrata imovina često se primjenjuju multivarijatne statističke metode
+kako bi se proučilo ponašanje i međusobna povezanost većeg broja vrijednosnica unutar portfelja.
+Međutim, modeliranje velikog broja vremenskih nizova povrata dovodi do visokodimenzionalnih i
+kompleksnih modela koji su složeni za interpretaciju i primjenu u praksi. Empirijska istraživanja
+pokazuju da se povrati različitih vrijednosnica često kreću na sličan način, što nas upućuje da
+postoje neki zajednički faktori koji utječu na njihovo kretanje. Primjerice, u razdobljima gospodarske
+krize pad aktivnosti cijelog gospodarstva obično rezultira istodobnim padom cijena većine vrijednosnica,
+dok rast određenog sektora, poput tehnološkog, često dovodi do rasta cijena većine dionica unutar
+tog sektora \cite{anafin03}.
 
+Te činjenice omogućuju faktorskim modelima da objasne kretanje većeg broja povrata pomoću
+ogarničenog broja zajedničkih faktora te da pojednostavne njihovu analizu. Postoje tri vrste faktorskih
+modela \cite{campbell1997}. Prvi su \emph{markoekonomski faktorski modeli} koji se fokusiraju na varijable
+kao što su rast BDP-a, kamatne stope, stopa inflacije i slično. U ovakvom su modelu faktori osmotrivi
+pa se model može estimirati linearnom regresijom. Drugi su \emph{fundamentalni faktorski modeli} koji
+koriste podatke o poduzećima kako bi konsturiali svoje faktore. Treći su \emph{statistički faktorski
+modeli} čiji su faktori neosmotrive latentne varijable koje se estimiraju iz podataka \cite{tsay2010}.
+Ovaj rad će se fokusirati prvu vrstu odnosno na \emph{makroekonomske faktorske modele}.
+
+
+\subsection{Linearni faktorski model}
+\label{subsec:linearni-faktorski}
+
+Pretpostavimo da imamo $p$ imovina kroz $T$ vremenskih trenutaka. Neka je $r_{it}$ povrat imovine $i$
+u trenutku $t$. Opća forma faktorskog modela dana je izrazom:
+\begin{equation}
+  r_{it} = \alpha_i + \beta_{i1}f_{1t} + \dots + \beta_{im}f_{mt} + \epsilon_{it},
+  \quad t=1,\dots,T; \quad i=1,\dots,p,
+\end{equation}
+gdje je $\alpha_i$ konstanta, $\left\{f_{jt}|j=1,\dots,m\right\}$ su $m$ zajdeničkih (sistemskih)
+faktora, $\beta_{ij}$ su koeficijenti imovine $i$ uz faktor $j$, a $\epsilon_{it}$ je specifičan
+(idiosinkratski) faktor imovine $i$.
+
+Za faktor $\mathbf{f}_t = \left(f_{1t}, \dots, f_{mt}\right)^\intercal$ vrijedi:
+\begin{align}
+  E(\mathbf{f}_t) &= \boldsymbol{\mu}_f, \\
+  \mathrm{Cov}(\mathbf{f}_t) &= \mathbf{\Sigma}_f, \quad \text{je $m \times m$ matrica,}
+\end{align}
+dok je idiosinkratski faktor $\epsilon_{it}$
 
 \subsection{Jednofaktorski model povrata}
 \label{subsec:jednofaktorski}
@@ -325,14 +411,6 @@ MLE estimacija parametara pomoću OLS
 
 TODO Objasniti arhitekturu našeg modela, različiti pristupi
 TOOD Možda će biti potrebno raščlanit po funkcijama cilja
-
-\subsubsection{Multivariatni povrati}
-\label{subsubsec:multivariatni}
-
-Nek je $\mathbf{r}_t = (r_{1,t}, \dots, r_{N,t})^T$ vektor log povrata $N$ vrijednosnica u trenutku $t$.
-U ovom radu zanimat će nas zajednička distribucija ${\mathbf{r}_t}_{t=1}^{T}$, a posebnu pažnju obratit
-ćemo na funkciju uvjetne distribucije
-$F(\mathbf{r}_T, \dots,\mathbf{r}_{T-k}|\mathbf{r}_{T-k-1}, \dots, \mathbf{r}_1, \boldsymbol{\theta})$
 
 
 %-------------------------------------------------------------------------------
