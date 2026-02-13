@@ -184,13 +184,14 @@ gdje je $R_{it}$ artimetički povrat vrijednosnice $i$ u trenutku $t$. Ovo svojs
 u prostoru vrijednosnica}. Logaritamski povrati ne posjeduju to svojstvo.
 
 
-\subsubsection{Višak povrata}
+\subsubsection{Povrati iznad bezritične kamatne stope}
 \label{subsubsec:excess}
 
-Višak povrata \engl{ excess return} predstavlja razliku između ostvarenog povrata određene imovine
-i referentnog, bezrizičnog povrata, te mjeri dodatnu kompenzaciju koju investitor ostvaruje za
-preuzimanje rizika. Kao referentni povrat najčešće se koriste prinosi na državne obveznice visoke
-kreditne kvalitete i kratkog dospijeća, jer se smatra da nose zanemariv rizik \cite{tsay2010}.
+Povrati iznad bezrizične kamatne stope \engl{ excess return} predstavlja razliku između ostvarenog
+povrata određene imovine i referentnog, bezrizičnog povrata, te mjeri dodatnu kompenzaciju koju
+investitor ostvaruje za preuzimanje rizika. Kao referentni povrat najčešće se koriste prinosi
+na državne obveznice visoke kreditne kvalitete i kratkog dospijeća, jer se smatra da nose
+zanemariv rizik \cite{tsay2010}.
 
 \begin{equation}
   R_t^{excess} = R_t - R_f
@@ -382,6 +383,7 @@ u trenutku $t$. Opća forma faktorskog modela dana je izrazom:
 \begin{equation}
   r_{it} = \alpha_i + \beta_{i1}f_{1t} + \dots + \beta_{im}f_{mt} + \epsilon_{it},
   \quad t=1,\dots,T; \quad i=1,\dots,p,
+\label{eq:faktorski-opca}
 \end{equation}
 gdje je $\alpha_i$ konstanta, $\left\{f_{jt}|j=1,\dots,m\right\}$ su $m$ zajdeničkih (sistemskih)
 faktora, $\beta_{ij}$ su koeficijenti imovine $i$ uz faktor $j$, a $\epsilon_{it}$ je specifičan
@@ -390,35 +392,122 @@ faktora, $\beta_{ij}$ su koeficijenti imovine $i$ uz faktor $j$, a $\epsilon_{it
 Za faktor $\mathbf{f}_t = \left(f_{1t}, \dots, f_{mt}\right)^\intercal$ vrijedi:
 \begin{align}
   E(\mathbf{f}_t) &= \boldsymbol{\mu}_f, \\
-  \mathrm{Cov}(\mathbf{f}_t) &= \mathbf{\Sigma}_f, \quad \text{je $m \times m$ matrica,}
+  \mathrm{Cov}(\mathbf{f}_t) &= \mathbf{\Sigma}_f, \quad \text{$m \times m$ matrica,}
 \end{align}
-dok je idiosinkratski faktor $\epsilon_{it}$
+dok je idiosinkratski faktor $\epsilon_{it}$ modeliran bijelim šumom koji nije koreliran sa
+sistemskim faktorima $f_{jt}$ i drugim idiosinkratskim faktorima. Dakle predpostavljamo:
+\begin{align}
+  E(\epsilon_{it}) &= 0 \quad \text{za sve } i,t \\
+  \mathrm{Cov}(f_{jt}, \epsilon_{is}) &= 0 \quad \text{za sve } i,j,t,s \\
+  \mathrm{Cov}(\epsilon_{it}, \epsilon_{js}) &=
+  \begin{cases}
+    \sigma_i^2, &\text{ako $i = j$ i $t = s$}, \\
+    0, &\text{inače.}
+  \end{cases}
+\end{align}
+
+Jednadžbu (\ref{eq:faktorski-opca}) možemo zapisati i u matričnom obliku za svih $p$ imovina
+u trenutku $t$:
+\begin{equation}
+  \mathbf{r}_t = \boldsymbol{\alpha} + \boldsymbol{\beta}\mathbf{f_t} + \boldsymbol{\epsilon_t},
+  \quad t = 1, \dots, T,
+\label{eq:faktorski-matricna}
+\end{equation}
+gdje je $\mathbf{r}_t = \left(r_{1t}, \dots, r_{pt}\right)^\intercal$ vektor povrata,
+$\boldsymbol{\alpha} = \left(\alpha_1, \dots, \alpha_p\right)^\intercal$ vektor konstanti,
+$\boldsymbol{\beta} = \left[\beta_{ij}\right]$ je $p \times m$ matrica koeficijenata, a
+$\boldsymbol{\epsilon}_t = \left(\epsilon_{1t}, \dots, \epsilon_{pt}\right)^\intercal$ je
+vektor idiosinkratskih faktora čija je kovarijacijska matrica
+$\mathrm{Cov}(\boldsymbol{\epsilon}_t) = \boldsymbol{\Psi} = \mathrm{diag}\left\{
+\sigma_1^2, \dots, \sigma_k^2\right\} \; p \times p$ dijagonalna matrica. Kovarijacisku
+matricu povrata $\mathbf{r}_t$ možemo računati sljedećom formulom:
+\begin{equation}
+  \mathrm{Cov}(\mathbf{r}_t) = \boldsymbol{\beta}\boldsymbol{\Sigma}_f\boldsymbol{\beta}^\intercal
+  + \boldsymbol{\Psi}.
+\end{equation}
+
+Zatim jednadžbu (\ref{eq:faktorski-matricna}) možemo zapisati u sljedećem obliku:
+\begin{equation}
+  \mathbf{r}_t = \boldsymbol{\xi}\mathbf{g}_t + \boldsymbol{\epsilon}_t,
+\end{equation}
+gdje $\mathbf{g}_t = \left(1, \mathbf{f}_t^\intercal\right)^\intercal$,
+a $\boldsymbol{\xi} = [\boldsymbol{\alpha}, \boldsymbol{\beta}]$ je
+$p \times (m+1)$ matrica. Transponiramo li prethodnu jednadžbu i grupiramo podatke za svih $T$ trenutaka
+dobivamo:
+\begin{equation}
+  \mathbf{R} = \mathbf{G}\boldsymbol{\xi}^\intercal + \mathbf{E},
+\label{eq:faktorski-matricna-ukupna}
+\end{equation}
+gdje je $\mathbf{R} \; T \times p$ matrica povrata čiji je $t$-ti redak $\mathbf{r}_t^\intercal$,
+$\mathbf{G}$ je $T \times (m+1)$ matrica čiji je $t$-ti redak $\mathbf{g}_t^\intercal$,
+$\mathbf{E}$ je $T \times p$ matrica idiosinkratskih faktora čiji je $t$-ti
+redak $\boldsymbol{\epsilon}_t^\intercal$ \cite{tsay2010}.
+
+S obzirom da nas zanimaju \emph{makroekonomski faktorski modeli} čiji su faktori $\mathbf{f}_t$
+osmotrivi, jednadžba (\ref{eq:faktorski-matricna-ukupna}) ima oblik višestruke multivariatne
+linearne regresije. Zbog toga parametre modela možemo estimirati metodom najmanjih kvadrata
+\cite{johnson2002}:
+\begin{equation}
+    \widehat{\boldsymbol{\xi}^\intercal} = \begin{bmatrix}
+      \;\widehat{\boldsymbol{\alpha}}^\intercal\; \\
+      \;\widehat{\boldsymbol{\beta}}^\intercal\;
+    \end{bmatrix} = (\mathbf{G}^\intercal\mathbf{G})^{-1}(\mathbf{G}^\intercal\mathbf{R}),
+\label{eq:ols-matrix}
+\end{equation}
+odakle su $\boldsymbol{\alpha}$ i $\boldsymbol{\beta}$ lako dostupni. Reziduale, odnosno
+povrate idiosinkratskih faktora možemo lako dobiti koristeći formulu (\ref{eq:faktorski-matricna-ukupna}):
+\begin{equation}
+  \widehat{\mathbf{E}} = \mathbf{R} - \mathbf{G}\widehat{\boldsymbol{\xi}}^\intercal.
+\end{equation}
 
 \subsection{Jednofaktorski model povrata}
 \label{subsec:jednofaktorski}
 
-TODO Objašnjenje jednofaktorskog modela
+Jedan od najpoznatijih \emph{makroekonomskih faktorskih modela} koristi povrat tržišta
+kao faktor koji utječe na sve vrijednosnice:
+\begin{equation}
+  r_{it} = \alpha_i + \beta_ir_{mt} + \epsilon_{it} \qquad i=1, \dots,p; \qquad t=1, \dots, T,
+\label{eq:jednofaktorski}
+\end{equation}
+gdje je $r_{it}$ povrat vrijednosnice $i$ iznad bezrizične kamatne stope, a $r_{mt}$ povrat
+tržišta iznad bezrizične kamatne stope. Kod modeliranja dionica, za povrat tržišta $r_{mt}$
+uzima se povrat nekog tržišnog indeksa (npr. CROBEX za hrvatsko tržište) iznad bezrizične
+kamatne stope. Koeficijenti modela $\alpha_i$ i $\beta_i$ procjenjuju se metodom najmanjih
+kvadrata (\ref{eq:ols-matrix}).
+
+Ovaj rad fokusirat će se upravo na jednofaktorski model povrata. Cilj ovog rada biti će
+ispitati može li model dubokog učenja, iz prozora povijesnih povrata
+$\mathbf{R}_H=\left\{\mathbf{r}_t\right\}_{t=1}^k$,
+procijeniti koeficijente $\alpha_i$ i $\beta_i$, koji će bolje odgovarati budućem prozoru povrata
+$\mathbf{R}_F=\left\{\mathbf{r}_t\right\}_{t=k+1}^T$,
+nego procjena koeficijenata $\alpha_i$ i $\beta_i$ koju možemo dobiti metodom najmanjih kvadrata
+na istom povijesnom prozoru povrata $\mathbf{R}_H$ za $1\le k < T$. Način na koji ćemo mjeriti
+koliko dobro procjena koeficijenata $\alpha_i$ i $\beta_i$ odgovara budućem prozoru povrata
+$\mathbf{R}_F$ biti će detaljnije objašnjen u potpoglavlju \ref{sec:model-dubokog-ucenja}.
 
 
-\subsubsection{Procjena parametara jednofaktorskog modela}
-\label{subsubsec:jednofaktorski-estimacija}
-
-MLE estimacija parametara pomoću OLS
+\section{Duboko učenje}
+\label{sec:duboko-ucenje}
 
 
-\section{LSTM Model}
-\label{sec:lstm}
 
-TODO Objasniti arhitekturu našeg modela, različiti pristupi
-TOOD Možda će biti potrebno raščlanit po funkcijama cilja
 
 
 %-------------------------------------------------------------------------------
-\chapter{Podatci}
-\label{pog:podatci}
+\chapter{Implementacija}
+\label{pog:implementacija}
 
-TODO Odakle nam podatci, kako su procesirani, povezat s definiranim varijablama
 
+\section{Podatci}
+\label{sec:podatci}
+TODO Odakle nam podatci, kako su procesirani, povezati s definiranim varijablama
+
+
+\section{Model dubokog učenja}
+\label{sec:model-dubokog-ucenja}
+
+TODO Objasniti arhitekturu našeg modela
+TOOD Objasniti različite funkcije cilja
 
 %-------------------------------------------------------------------------------
 \chapter{Rezultati}
@@ -464,16 +553,6 @@ TODO Zaključak
 \begin{keywords}
   the first keyword; the second keyword; the third keyword
 \end{keywords}
-
-
-%--- PRIVITCI / APPENDIX -------------------------------------------------------
-
-% Sva poglavlja koja slijede će biti označena slovom i riječi privitak / All following chapters will be denoted with an appendix and a letter
-\backmatter
-
-\chapter{The Code}
-
-TODO Appendix ako bude potrebe
 
 
 \end{document}
