@@ -221,10 +221,12 @@ tada njezina funkcija gustoće ima oblik \cite{johnson1994vol1}:
 Za osmotreni uzorak $\{x_1, x_2, \dots, x_n\}$, procjena sredine dana je aritmetičkom sredinom
 \begin{equation}
   \widehat{\mu} = \frac{1}{n}\sum_{i=1}^{n} x_i,
+\label{eq:normalna-sredina}
 \end{equation}
 dok se varijanca procjenjuje izrazom:
 \begin{equation}
   \widehat{\sigma^2} = \frac{1}{n}\sum_{i=1}^{n} (x_i - \widehat{\mu})^2.
+\label{eq:normalna-varijanca}
 \end{equation}
 
 
@@ -325,7 +327,8 @@ izrazima \cite{tsay2010}:
 \begin{equation}
   \widehat{\boldsymbol{\mu}}_x = \frac{1}{T}\sum_{t=1}^{T}\mathbf{x}_t\text{,} \qquad
   \widehat{\mathbf{\Sigma}}_x = \frac{1}{T-1}\sum_{t=1}^{T}\left(\mathbf{x}_t - \widehat{\boldsymbol{\mu}}_x\right)
-  \left(\mathbf{x}_t - \widehat{\boldsymbol{\mu}}_x\right)^\intercal\text{.} 
+  \left(\mathbf{x}_t - \widehat{\boldsymbol{\mu}}_x\right)^\intercal\text{.}
+\label{eq:multivariatna-sredina-kovarijacijska}
 \end{equation}
 
 Ako pretpostavimo da slučajni vektor $\mathbf{X}$ dolazi is multivariatne normalne distribucije s
@@ -396,7 +399,7 @@ Za faktor $\mathbf{f}_t = \left(f_{1t}, \dots, f_{mt}\right)^\intercal$ vrijedi:
 dok je idiosinkratski faktor $\epsilon_{it}$ modeliran bijelim šumom koji nije koreliran sa
 sistemskim faktorima $f_{jt}$ i drugim idiosinkratskim faktorima. Dakle predpostavljamo:
 \begin{align}
-  E(\epsilon_{it}) &= 0 \quad \text{za sve } i,t \\
+  \mathrm{E}(\epsilon_{it}) &= 0 \quad \text{za sve } i,t \\
   \mathrm{Cov}(f_{jt}, \epsilon_{is}) &= 0 \quad \text{za sve } i,j,t,s \\
   \mathrm{Cov}(\epsilon_{it}, \epsilon_{js}) &=
   \begin{cases}
@@ -418,12 +421,13 @@ $\boldsymbol{\beta} = \left[\beta_{ij}\right]$ je $p \times m$ matrica koeficije
 $\boldsymbol{\epsilon}_t = \left(\epsilon_{1t}, \dots, \epsilon_{pt}\right)^\intercal$ je
 vektor idiosinkratskih faktora čija je kovarijacijska matrica
 $\mathrm{Cov}(\boldsymbol{\epsilon}_t) = \boldsymbol{\Psi} = \mathrm{diag}\left\{
-\sigma_1^2, \dots, \sigma_k^2\right\} \; p \times p$ dijagonalna matrica. Kovarijacisku
-matricu povrata $\mathbf{r}_t$ možemo računati sljedećom formulom:
-\begin{equation}
-  \mathrm{Cov}(\mathbf{r}_t) = \boldsymbol{\beta}\boldsymbol{\Sigma}_f\boldsymbol{\beta}^\intercal
-  + \boldsymbol{\Psi}.
-\end{equation}
+\sigma_1^2, \dots, \sigma_k^2\right\} \; p \times p$ dijagonalna matrica. Očekivanje i kovarijacisku
+matricu povrata $\mathbf{r}_t$ možemo računati sljedećim formulama:
+\begin{align}
+  \mathrm{E}(\mathbf{r}_t) &= \boldsymbol{\alpha} + \boldsymbol{\beta}\boldsymbol{\mu}_f \label{eq:ocekivanje-r} \\
+  \mathrm{Cov}(\mathbf{r}_t) &= \boldsymbol{\beta}\boldsymbol{\Sigma}_f\boldsymbol{\beta}^\intercal
+  + \boldsymbol{\Psi}. \label{eq:kovarijacijska-r}
+\end{align}
 
 Zatim jednadžbu (\ref{eq:faktorski-matricna}) možemo zapisati u sljedećem obliku:
 \begin{equation}
@@ -457,6 +461,7 @@ odakle su $\boldsymbol{\alpha}$ i $\boldsymbol{\beta}$ lako dostupni. Reziduale,
 povrate idiosinkratskih faktora možemo lako dobiti koristeći formulu (\ref{eq:faktorski-matricna-ukupna}):
 \begin{equation}
   \widehat{\mathbf{E}} = \mathbf{R} - \mathbf{G}\widehat{\boldsymbol{\xi}}^\intercal.
+\label{eq:procjena-reziduala}
 \end{equation}
 
 \subsection{Jednofaktorski model povrata}
@@ -698,17 +703,181 @@ izlaznim vratima:
 \chapter{Implementacija}
 \label{pog:implementacija}
 
+U ovom poglavlju opisana je programska implementacija predloženog rješenja te alati i biblioteke koje su
+omogućile učinkovitu izgradnju, treniranje i evaluaciju modela. Implementacija je realizirana u programskom
+jeziku Python 3 zbog njegove široke primjene u području strojnog učenja i bogatog ekosustava znanstvenih
+biblioteka. U tablici \ref{tab:biblioteke} su navedene glavne biblioteke korištene u radu, zajedno s
+njihovom ulogom u implementaciji.
+
+\begin{table}[h]
+\centering
+\caption{Korištene Python biblioteke}
+\label{tab:biblioteke}
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{lp{10cm}}
+\hline
+\textbf{Biblioteka} & \textbf{Namjena} \\
+\hline
+\texttt{hydra-core} & Upravljanje konfiguracijama i pojednostavljenje podešavanja hiperparametara modela \cite{hydra} \\
+\texttt{lightning}  & Pojednostavljenje i ubrzavanje procesa treniranja modela \cite{lightning} \\
+\texttt{matplotlib} & Vizualizacija podataka i rezultata \cite{matplotlib} \\
+\texttt{numpy}      & Rukovanje višedimenzionalnim poljima podataka \cite{numpy} \\
+\texttt{pandas}     & Učitavanje i obrada tabličnih podataka \cite{pandas} \\
+\texttt{scipy}      & Estimacija parametara distribucija i generiranje sintetičkih podataka \cite{scipy} \\
+\texttt{torch}      & Razvoj i treniranje modela strojnog učenja \cite{torch} \\
+\hline
+\end{tabular}
+\end{table}
+
 
 \section{Podatci}
 \label{sec:podatci}
-TODO Objašnjenje odakle nam dolaze podatci, kako su procesirani te povezat s definiranim varijablama
 
+Kao što je najavljeno u potpoglavlju \ref{subsec:jednofaktorski}, model implementiran u ovom radu temelji
+se na jednofaktorskom modelu povrata. Budući da se u modelu procjenjuju koeficijenti $\alpha_i$ i $\beta_i$,
+na ulazu su potrebni povrati tržišta i dionica iznad bezrizične kamatne stope. Svi korišteni podatci preuzeti
+su iz baze podataka dostupne na mrežnim stranicama Kenetha R. Frencha \cite{fammafrench}.
+
+
+\subsubsection{Tržišni povrati}
+\label{subsubsec:trzisni-povrati}
+
+Podatci o dnevnim artimetičkim tržišnim povratima i denvneoj bezrizičnoj kamatnoj stopi preuzeti su iz
+skupa podataka \emph{Fama/French 3 Factors [Daily]}.
+
+Tržišni povrat definiran je kao vrijednosno otežani \engl{ value weighted} povrat svih poduzeća iz baze
+CRSP inkorporiranih u SAD-u i izlistanih na burzama NYSE, AMEX ili NASDAQ, uz zadovoljenje kriterija
+kvalitete podataka. Takva konstrukcija tržišnog portfelja po svojoj strukturi i obuhvatu vrlo je slična
+indeksu koji prati SPDR S\&P 500 ETF, budući da oba predstavljaju široko diverzificirani presjek
+američkog tržišta kapitala.
+
+Bezrizična kamatna stopa definirana je kao prinos na jednomjesečni američki trezorski zapis. Do svibnja
+2024. godine podatci potječu od Ibbotson Associates, dok se od lipnja 2024. godine koristi referentna stopa
+iz ICE BofA US 1-Month Treasury Bill Indexa.
+
+
+\subsubsection{Povrati dionica}
+\label{subsubsec:povrati-dionica}
+
+Podatci o dnevnim artimetičkim povratima dionica preuzeti su iz skupa \emph{25 Portfolios Formed on Size and
+Book-to-Market (5 $\times$ 5) [Daily]}. Riječ je o 25 portfelja formiranih kao presjek pet portfelja
+prema veličini poduzeća \engl{market equity, ME} i pet portfelja prema omjeru knjigovodstvene i tržišne
+vrijednosti kapitala \engl{ book-to-market equity, BE/ME}. Portfelji se konstruiraju na kraju lipnja
+svake godine kao presjeci:
+\begin{itemize}
+  \item pet kvintila prema tržišnoj kapitalizaciji ME
+  \item pet kvintila prema omjeru BE/ME
+\end{itemize}
+
+U ovom radu koriste se povrati portfelja, a ne pojedinačnih dionica. Razlog tome je što pojedinačne dionice
+tijekom vremena ulaze i izlaze s tržišta, što može uzrokovati probleme u konstrukciji uravnoteženih
+vremenskih nizova.
+
+
+\section{Obrada podataka}
+\label{sec:obrada-podataka}
+
+U ovom potpoglavlju ćemo opisati kako od podataka navedenih u potpoglavlju \ref{sec:podatci} konstruirati
+značajke za naš model. Prvo nakon što smo učitali podatke o artimetičkim povratima tržišta, portfelja i
+bezrizičnu kamatnu stopu, uklanjamo nedostajuće podatke. U našim podatcima to su retci u kojima se nalaze
+vrijednosi -99.99 ili -999. Podatke zatim filtriramo na raspon od 1. 1. 1950. do 28. 11. 2025. uključivo.
+Odbacujemo podatke prije 1950. godine jer je presjek prvog kvintila po tržišnoj kapitalizaciji i prvog
+kvintila po omjeru BE/ME bio jako nestabilan\footnote{U tim periodima se taj presjek sastojao od svega
+nekoliko dionica}.
+
+Sljedeći korak je od povrata tržišta i portfelja oduzeti bezrizičnu kamatnu stopu kako bi dobili povrate iznad 
+bezrizične kamatne stope. Neka je $R_{Mt}$ dnevni artimetički povrata iznad bezrizične kamatne stope tržišta u
+trenutku $t$, a $R_{it}$ dnevni artimetički povrata iznad bezrizične kamatne stope portfelja $i$ u trenutku
+$t$. Definirajmo zatim vektore $\mathbf{R}_M = \left(R_{M1}, \dots R_{MT}\right)^\intercal$ i
+$\mathbf{R}_i = \left(R_{i1}, \dots, R_{iT}\right)^\intercal$ te matricu
+$\mathbf{R}_{P25} = [\mathbf{R}_1, \dots, \mathbf{R}_{25}]$ oblika $T \times 25$, gdje je $T$ ukupan broj
+dnevnih povrata u našim podatcima.
+
+U idućem koraku vektor $\mathbf{R}_M$ i matricu $\mathbf{R}_{P25}$ potrebno je uzorkovati kliznim prozorom
+duljine 90 i korakom 30:
+\begin{align}
+  \mathbf{w}_{Mk} &= (R_{Mi}, \dots, R_{M(i+89)})^\intercal &i=30k+1; \quad 0 \le k \le \left\lfloor\frac{T-90}{30}\right\rfloor, k \in \mathbb{Z}  \\
+  \mathbf{W}_{Pk} &= \begin{bmatrix}
+      \; \mathbf{R}_{P25}^{(i)} \; \\
+      \; \vdots \; \\
+      \; \mathbf{R}_{P25}^{(i+89)} \;
+    \end{bmatrix} &i=30k+1; \quad 0 \le k \le \left\lfloor\frac{T-90}{30}\right\rfloor, k \in \mathbb{Z}
+\end{align}
+gdje je $\mathbf{R}_{P25}^{(i)}$ $i$-ti redak matrice $\mathbf{R}_{P25}$. Dobivene prozore zatim dijelimo na
+način da prvih 60 povrata prozora uzimamo kao povijesne povrate,a posljednjih 30 povrata kao buduće:
+\begin{align}
+  \mathbf{x}_{Mk} &= (w_{Mk1}, \dots, w_{Mk60})^\intercal & \mathbf{y}_{Mk} &= (w_{Mk61}, \dots, w_{Mk90})^\intercal, \\
+  \mathbf{X}_{Pk} &= \begin{bmatrix}
+      \; \mathbf{W}_{Pk}^{(1)} \; \\
+      \; \vdots \; \\
+      \; \mathbf{W}_{Pk}^{(60)} \;
+    \end{bmatrix} & \mathbf{Y}_{Pk} &= \begin{bmatrix}
+      \; \mathbf{W}_{Pk}^{(61)} \; \\
+      \; \vdots \; \\
+      \; \mathbf{W}_{Pk}^{(90)} \;
+    \end{bmatrix},
+\end{align}
+gdje $w_{Mki}$ $i$-ti element vektora $\mathbf{w}_{Mk}$. Primjeti da se podatci, zbog preklapanja prozora, iz
+$\mathbf{R}_M$ i $\mathbf{R}_{P25}$ ponavljaju u uzorkovanim podatcima. To preklapanje je nužno kako bi imali
+dovoljno uzorka za model. Korak kliznog prozora jednak je veličini budućih prozora kako se barem oni nebi
+preklapali.
+
+Prije nego što povijesni prozori $\mathbf{x}_{Mk}$ i $\mathbf{X}_{Pk}$ budu spremni za naš model, dodajemo još
+jednu značajku u obliku interakcije:
+\begin{align}
+  \mathbf{X}_{Mk} &= \mathbf{x}_{Mk} \cdot \mathbf{1}_{25}^\intercal, \\
+  \mathbf{X}_{PMk} &= \mathbf{X}_{Mk} \odot \mathbf{X}_{Pk},
+\end{align}
+gdje je $\mathbf{1}_n$ vektor jedinica dužine $n$. Neka je
+$\mathbf{X}_k = [\mathbf{X}_{Pk}^\intercal, \mathbf{X}_{Mk}^\intercal, \mathbf{X}_{PMk}^\intercal]$ tenzor
+oblika $25\times60\times3$. Time smo konstruirali ulazni tenzor za naš model.
+
+
+Jedna od funkcija cilja našeg modela je negativna logaritamska izglednost. Za njezin izračun potrebno nam je
+očekivanje i kovarijacijska matrica povrata (\ref{eq:log-likelihood}). S obzirom da naš model pretpostavlja
+jednofaktorski model povrata (\ref{eq:jednofaktorski}) očekivanje i kovarijacijsku matricu možemo izračunati
+koristeći formule (\ref{eq:ocekivanje-r}) i (\ref{eq:kovarijacijska-r}). Naš model procjenjuje koeficijente
+$\widehat{\boldsymbol{\alpha}}$ i $\widehat{\boldsymbol{\beta}}$, stoga kako bi mogli računati negativnu log
+izglednost moramo još procijeniti $\mu_f$, $\sigma_f^2$ i $\boldsymbol{\Psi}$ iz prozora budućih povrata. S
+obzirom da je naš faktor predstavljaju povrati tržišta, $\mu_{fk}$ i $\sigma_{fk}^2$ procjenjujemo iz prozora
+budućih povrat tržišta $\mathbf{y}_{Mk}$ pomoću izraza (\ref{eq:normalna-sredina}) i
+(\ref{eq:normalna-varijanca}). Kako bi izračunali procjenu kovarijacijske matrice reziduala
+$\widehat{\boldsymbol{\Psi}}$ primjenjujemo formulu (\ref{eq:multivariatna-sredina-kovarijacijska}) na
+rezidualima $\widehat{\mathbf{E}}$. Kako bi izračunali $\widehat{\mathbf{E}}$ možemo iskoristiti formulu
+(\ref{eq:procjena-reziduala}). Za nju su nam potrebni parametri $\widehat{\boldsymbol{\xi}}^\intercal$ koje
+možemo dobiti primjenom metode najmanjih kvadrata (\ref{eq:ols-matrix}) na $\mathbf{y}_{Mk}$ i
+$\mathbf{Y}_{Pk}$. Time smo dobili procjene za $\widehat{\boldsymbol{\Psi}}_k$. Skup
+$\left\{\mathbf{Y}_{Pk}, \mathbf{y}_{Mk}, \mu_{fk}, \sigma_{fk}^2, \widehat{\boldsymbol{\Psi}}_k\right\}$
+predstavlja ciljne varijable naših $k$ uzorka.
+
+
+\section{Sintetički podatci}
+\label{sec:sinteticki}
+
+Osim stvarnih podataka naš model trenirali smo i na sintetičkim podatcima. Prednost sintetičkih podataka
+je to što ih možemo generirti prozivljno mnogo te znamo stvarne vrijendosti parametara koje pokušavamo
+procijeniti. Kako bi sintetički podatci mogli pomoći modelu u generalizaciji na stvarne podatke moraju biti
+što sličniji stvarnim podatcima.
+
+Za simulaciju tržišnih povrata odabralismo studentovu $t$-distribuciju s pet stupnjeva slobode. Za procjenu
+$\mu_M$ i $\sigma_M^2$ koristili smo procjenu najveće izglednosti koju nudi biblioteka \texttt{scipy} na
+podatcima $\mathbf{R}_M$. Primjenjivanjem metode najmanjih kvadrata (\ref{eq:ols-matrix}) na
+$\mathbf{W}_{Mk}$ i $\mathbf{W}_{Pk}$ dobivamo $k$ parametara $\widehat{\boldsymbol{\xi}}_k$.
+To nam omogućuje da uz formulu (\ref{eq:procjena-reziduala}) dobijemo $k$ reziduala $\widehat{\mathbf{E}}_k$.
+Iz parametra $\widehat{\boldsymbol{\xi}}_k$ su lako dostupni $\widehat{\boldsymbol{\alpha}}_k$ i
+$\widehat{\boldsymbol{\beta}}_k$. Potom sve elemente $\widehat{\mathbf{E}}_k$,
+$\widehat{\boldsymbol{\alpha}}_k$ i $\widehat{\boldsymbol{\beta}}_k$ promatramo kao realizacije triju
+normalnih distribucija $\{\epsilon_i\}_{i=1}^{90\times25\times k}$, $\{\alpha_i\}_{i=1}^{25\times k}$ i
+$\{\beta_i\}_{i=1}^{25\times k}$. Primjenom formula (\ref{eq:normalna-sredina}) i
+(\ref{eq:normalna-varijanca}) dobivamo procjene $\widehat{\mu}_{\epsilon}$, $\widehat{\sigma}_{\epsilon}^2$,
+$\widehat{\mu}_{\alpha}$, $\widehat{\sigma}_{\alpha}^2$, $\widehat{\mu}_{\beta}$ i $\widehat{\sigma}_{\beta}^2$.
+
+TODO Generiranje podataka iz dristribucija
 
 \section{Model dubokog učenja}
 \label{sec:model-dubokog-ucenja}
 
-TODO Objasniti arhitekturu našeg modela
-TOOD Objasniti različite funkcije cilja
+TODO Objasniti arhitekturu našeg modela i različite funkcije cilja
 
 %-------------------------------------------------------------------------------
 \chapter{Rezultati}
