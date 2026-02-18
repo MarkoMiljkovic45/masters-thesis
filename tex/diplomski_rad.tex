@@ -6,6 +6,7 @@
 % Ovdje dodati pakete npr. \usepackage{blindtext}
 \usepackage{algorithm}
 \usepackage{algorithmic}
+\usepackage{graphicx}
 
 
 %--- PODACI O RADU / THESIS INFORMATION ----------------------------------------
@@ -75,10 +76,10 @@ TODO Uvod.
 \label{pog:metodologija}
 
 Ovo poglavlje pokriva teoretsku osnovu potrebnu za razumijevanje implementiranog modela dubokog učenja te 
-samu arhitekturu modela. Prvo ćemo definirati varijable pomoću kojih ćemo kasnije oblikovati naše
-podatke. Zatim ćemo proći osnove faktorskih modela i razmotriti kako jednofaktorski model može objasniti
-povrate imovina. Na kraju ćemo opisati sam model dubokog učenja, njegovu arhitekturu i funckije cilja
-koje se koriste u ovom radu. !TODO Revidirat nakon ostatka poglavlja!
+strukturu podataka na kojima se primjenjuje. Prvo ćemo definirati osnovne varijable koje ćeemo se oslanjati
+u ovom radu. Zatim ćemo proučiti njihova statistička svojstva. Nakon toga razmotrit ćemo faktorske modele
+koji omogućuju modeliranje naših varijabli. Na kraju ćemo pokriti duboko učenje i specifičnu arhitekturu
+koja će se koristiti u ovom radu.
 
 \section{Povrati imovine}
 \label{sec:povrati}
@@ -94,14 +95,15 @@ instrumenata. Služe kao mjerilo performansi tržišta ili određenog segmenta t
 
 Kako bi se omogućila analiza kretanja cijena kroz vrijeme, kontinuirani tok transakcijskih podataka
 uzorkuje se u diskretnim vremenskim intervalima (npr. minute, sati, dani), čime se dobivaju vremenski
-nizovi cijena koji služe kao temelj za statističku analizu i modeliranje. Slika \ref{fig:crobex-price}
-prikazuje kretanje dnevnih cijena CROBEX indeksa u zadnjih 5 godina.
+nizovi cijena koji služe kao temelj za statističku analizu i modeliranje. Slika \ref{fig:spy-price}
+prikazuje kretanje dnevnih cijena za SPDR S\&P 500 ETF \engl{ exchange traded fund} od njegovog
+začeća 1993. do kraja 2025. godine.
 
 \begin{figure}[htb]
 \centering
-\includegraphics[width=15cm]{img/crobex_price_plot.png}
-\caption{Kretanje cijene CROBEX indeksa}
-\label{fig:crobex-price}
+\includegraphics[width=\textwidth]{img/spy_price_plot.pdf}
+\caption{Kretanje cijene SPDR S\&P 500 ETF-a}
+\label{fig:spy-price}
 \end{figure}
 
 U ovom radu koristit ćemo povrate umijesto samih cijena imovina. Postoje dva glavna razloga za to.
@@ -154,16 +156,16 @@ Ukamaćivanje logaritamski povrata može se ostvariti zbrajanjem pojedinačnih l
 povrata. To svojstvo zovemo \emph{aditivnost u vremenu}. Logaritmski povrati također
 posjeduju poželjna statistička svojstva \cite{tsay2010}. Za male magnitude vrijedi
 $r_t \approx R_t$. Ova aproksimacija je korisna kada se razmatraju kratki vremenski
-intervali \cite{anafin02}. Slika \ref{fig:crobex-returns} prikazuje dnevne artimetičke
-i logaritamske povrate CROBEX indeksa u zadnih 5 godina. Sa slike vidimo da nema značajne
+intervali \cite{anafin02}. Slika \ref{fig:spy-returns} prikazuje dnevne artimetičke
+i logaritamske povrate SPDR S\&P 500 ETF. Sa slike vidimo da nema značajne
 razlike između artimetičkih i logaritamskih povrata jer su povrati izračunati na kratkom
 odnosno dnevnom vremenskom intervalu.
 
 \begin{figure}[htb]
 \centering
-\includegraphics[width=15cm]{img/crobex_returns_plot.png}
-\caption{Artimetički i logaritamski povrati CROBEX indeksa}
-\label{fig:crobex-returns}
+\includegraphics[width=\textwidth]{img/spy_returns_plot.pdf}
+\caption{Artimetički i logaritamski povrati SPDR S\&P 500 ETF-a}
+\label{fig:spy-returns}
 \end{figure}
 
 
@@ -264,7 +266,6 @@ f(x) = \frac{\Gamma\left(\frac{\nu+1}{2}\right)}{\Gamma\left(\frac{\nu}{2}\right
 \left(1 + \frac{(x-\mu)^2}{\nu\sigma^2}\right)^{-\frac{\nu+1}{2}}.
 \end{equation}
 
-Zbog složenog oblika funckije gustoće, ne postoji izravan način za izračun njenih prametara.
 Za procjenu parametara t distribucije koriste se metode procjene najveće izglednosti \engl{ maximum
 likelihood estimation} \cite{johnson1994vol2}.
 
@@ -277,7 +278,7 @@ konstantnom sredinom i varijancom, čime se značajno pojednostavljuje teorijska
 analitičkih rezultata. Međutim, takva pretpostavka suočava se s nizom ograničenja: aritmetički povrati
 imaju donju granicu od $-1$, dok normalna distribucija nema ograničenja po realnoj osi,
 višeperiodni povrati ne zadržavaju normalnu distribuciju zbog multiplikativne prirode
-(\ref{eq:artimeticki-ukamacivanje}), a empirijski podaci često pokazuju odstupanja od normalnosti.
+(\ref{eq:artimeticki-ukamacivanje}), a empirijski podaci često pokazuju odstupanja od normalnosti \cite{cont2001}.
 
 Alternativno možemo pretpostaviti da su logaritamski povrati nezavisno i identično normalno
 distribuirani sa sredinom $\mu$ i varijancom $\sigma^2$. S tom pretpostavkom impliciramo da
@@ -290,22 +291,20 @@ financijski povrati često pokazuju deblje repove distribucije i veću učestalo
 što to predviđa normalna distribucija \cite{tsay2010}.
 
 Kako bismo bolje obuhvatili ta empirijska svojstva, možemo koristiti studentovu $t$-distribuciju.
-Slika \ref{fig:crobex-returns-pdf} prikazuje distribuciju gustoće vjerojatnosti dnevnih
-artimetičkih i logaritamskih povrata CROBEX indeksa u zadnjih 5 godina.
-Također je prikazana distribucija gustoće vjerojatnosti normalne distribucije i
-studentove $t$-distribucije s pet stupnjeva slobode \footnote{Biramo pet stupnjeva slobode kako bi
-imali konačna prva četiri momenta distribucije. Za više informacija pogledaj
-\cite[Chapter 28.]{johnson1994vol2}}. Parametri $\mu$ i $\sigma^2$ za normalnu i $t_5$-distribuciju
-procjenjeni su iz artimetičkih povrata za lijevi graf i logaritamskih povrata za desni graf.
-Sa slike vidimo kako $t_5$-distribucija puno vijernije modelira distribuciju povrata. Također vidimo
-da su, zbog male magnitude dnevnih povrata, artimetički i logaritamski povrati gotovo identično
-distribuirani.
+Slika \ref{fig:spy-returns-pdf} prikazuje distribuciju gustoće vjerojatnosti dnevnih
+artimetičkih i logaritamskih povrata SPDR S\&P 500 ETF-a. Također su prikazane distribucije gustoće
+vjerojatnosti normalne distribucije i studentove $t$-distribucije s pet stupnjeva slobode
+\footnote{Biramo pet stupnjeva slobode kako bi imali konačna prva četiri momenta distribucije.
+Za više informacija pogledati \cite{johnson1994vol2}}. Parametri $\mu$ i $\sigma^2$ za normalnu i
+$t_5$-distribuciju procjenjeni su iz artimetičkih povrata za lijevi graf i logaritamskih povrata za
+desni graf. Sa slike vidimo kako $t_5$-distribucija zbog svojih težih repova vijernije modelira
+distribuciju povrata od normalne distribucije.
 
 \begin{figure}[htb]
 \centering
-\includegraphics[width=15cm]{img/crobex_pdfs.png}
-\caption{Distribucija dnevnih artimetičkih i logaritamskih povrata CROBEX indeksa}
-\label{fig:crobex-returns-pdf}
+\includegraphics[width=\textwidth]{img/spy_pdfs.pdf}
+\caption{Distribucija dnevnih artimetičkih i logaritamskih povrata SPY ETF-a}
+\label{fig:spy-returns-pdf}
 \end{figure}
 
 
@@ -471,7 +470,7 @@ kao faktor koji utječe na sve vrijednosnice:
 \end{equation}
 gdje je $r_{it}$ povrat vrijednosnice $i$ iznad bezrizične kamatne stope, a $r_{mt}$ povrat
 tržišta iznad bezrizične kamatne stope. Kod modeliranja dionica, za povrat tržišta $r_{mt}$
-uzima se povrat nekog tržišnog indeksa (npr. CROBEX za hrvatsko tržište) iznad bezrizične
+uzima se povrat nekog tržišnog indeksa (npr. S\&P 500) iznad bezrizične
 kamatne stope. Koeficijenti modela $\alpha_i$ i $\beta_i$ procjenjuju se metodom najmanjih
 kvadrata (\ref{eq:ols-matrix}).
 
@@ -501,33 +500,198 @@ Za zadani ulazni vektor $\mathbf{x} = (x_1, \dots, x_n)^\intercal$, izlaz neuron
 gdje je $\mathbf{w} = (w_1, \dots, w_n)^\intercal$ vektor težina neurona koji odrežuje doprinos
 pojedine komponente ulaznog vektora, a skalar $b$ omogućuje dodatni pomak linearne kombinacije ulaza.
 Aktivacijska funkcija $f$ uvodi nelinearnost u model, čime se omogućuje aproskimacija složenih i
-nelinearnih odnosa u podatcima.
+nelinearnih odnosa u podatcima \cite{du02}.
 
-Neke od najčešće korištenih aktivacijskih funkcija su sigmoidalna funkcija i hiperbolni tangens.
+Neke od najčešće korištenih aktivacijskih funkcija su sigmoidalna funkcija i hiperbolni tangens,
+slika \ref{fig:activations}.
 Obje su nelinearne, monotono rastuće i kontinuirano diferencijabilne, što je ključno svojstvo u
 procesu učenja neuronskih mreža metodama koje se temelje na gradijentnom spustu. Sigmoidalna funkcija
 ima kodomenu u intervalu $\left\langle0,1\right\rangle$, dok hiperbolni tangens poprima vrijednosti u
 intervalu $\left\langle-1,1\right\rangle$, pri čemu obje funckije imaju karakterističan S-oblik.
 
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{img/activation_functions.pdf}
+\caption{Primjer aktivacijskih funkcija}
+\label{fig:activations}
+\end{figure}
+
+Umjetne neurone zatim možemo organizirati u slojeve. Prvi, odnosno ulazni, sloj, zatim proizvoljan broj skrivenih
+te na kraju izlazni sloj. Time dobivamo osnovnu arhitekturu neuronske mreže, slika \ref{fig:neural-net}.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{img/neural-net.pdf}
+\caption{Jednostavna neuronska mreža}
+\label{fig:neural-net}
+\end{figure}
+
 Među najznačajnijim arhitekturama dubokih modela ističu se duboke unaprijende mreže, konvolucijske
 neuronske mreže te povratne neuronske mreže. Svaka od navedenih arhitektura prilagođena je specifičnim 
-vrstama podataka i problemima.
-
-Odabir odgovarajuće arhitekture ovisi o prirodi i strukturi odabranih podataka. U okviru ovog rada
-koristit ćemo posebnu vrstu povratnih neuronskih mreža koje nazivamo mreže s dugoročnom memorijom
-\engl{ long short-term memory, LSTM}. LSTM mreže dizajnirane su kako bi omogućile učenje dugoročnih
-ovisnosti u sekvencijalnim podatcima, zbog čega se često primjenjuju u modeliranju vremenskih nizova.
+vrstama podataka i problemima. Odabir odgovarajuće arhitekture ovisi o prirodi i strukturi odabranih podataka. 
 
 \subsection{Povratne neuronske mreže}
 \label{subsec:povratne-mreze}
 
-TODO Općenito objašnjenje povratnih neuronskih mreža
+Dijeljenje parametara jedna je od ranijih ideja u strojnom učenju i statističkom modeliranju, koja
+omogućuje proširivanje modela na primjere različitih oblika te generalizaciju na podatke varijabilne
+duljine, osobito u kontekstu sekvencijalnih podataka. Ovakav se princip koristi u skrivenim
+Markovljevim modelima, gdje se isti skup parametara, poput matrice prijelaza
+$P(\mathbf{s}_t \mid \mathbf{s}_{t-1})$, koristi u svakom vremenskom koraku. Na taj način model ne ovisi
+o apsolutnoj poziciji u sekvenci, već isključivo o odnosu između susjednih stanja, što omogućuje
+modeliranje sekvenci proizvoljne duljine  i dijeljenje statističke snage kroz različite vremenske korake.
+Povratne neuronske mreže \engl{ recurrent neural networks, RNN} preuzimaju i generaliziraju ovu ideju u
+okviru dubokog učenja. One su prilagođene za obradu sekvencijalnih podataka tako da u svakom vremenskom
+koraku primjenjuju iste težine i istu transformaciju nad ulazom i prethodnim skrivenim stanjem, pri čemu
+skriveno stanje $\mathbf{h}_t$ ovisi o trenutnom ulazu $\mathbf{x}_t$ i stanju $\mathbf{h}_{t-1}$
+\cite{goodfellow2016}.
+
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{img/RNN-unrolled.png}
+\caption{Jednostavna povratna neuronska mreža \cite{colah2015}}
+\label{fig:unrolled-rnn}
+\end{figure}
+
+Slika \ref{fig:unrolled-rnn} prikazuje dijagram jednostavne povratne neuronske mreže i njezin razmotani
+\engl{ unrolled} oblik kroz vremenske korake. Povratnu neuronsku mrežu moguće je promatrati kao višestruke
+kopije iste neuronske mreže, pri čemu svaka kopija prosljeđuje informaciju svojoj sljedbenici u idućem
+vremenskom koraku. U razmotanom prikazu jasno se vidi da se u svakom koraku primjenjuje ista RNN ćelija A
+s istim parametrima, dok skriveno stanje predstavlja viđeni dio slijeda koja se prenosi kroz vrijeme.
+Na taj način model zadržava informaciju o prethodnim ulazima te postupno akumulira kontekst,
+što mu omogućuje modeliranje ovisnosti unutar sekvence, neovisno o njezinoj duljini \cite{colah2015}.
+
+Jednostavni povratni model možemo definirati sljedećim jednadžbama:
+\begin{align}
+  \mathbf{h}_t &= \tanh(\mathbf{W}_{hh}\mathbf{h}_{t-1} + \mathbf{W}_{xh}\mathbf{x}_{t} + \mathbf{b}_h), \\
+  \mathbf{o}_t &= \mathbf{W}_{hy}\mathbf{h}_t + \mathbf{b}_o,
+\end{align}
+gdje matrica $\mathbf{W}_{xh}$ projicira ulaz u prostor reprezentacije stanja, matrica $\mathbf{W}_{hh}$
+modelira evoluciju stanja dok matrica $\mathbf{W}_{hy}$ projicira stanje na prostor predikcija. Vektori
+$\mathbf{b}_h$ i $\mathbf{b}_o$ omogućuju linearni pomak \cite{du05}.
+
+Međutim, pri učenju dugoročnih zavisnosti u povratnim neuronskim mrežama pojavljuju se značajni
+matematički problemi. Gradijenti koji se propagiraju kroz velik broj vremenskih koraka imaju tendenciju
+eksponencijalnog smanjivanja (problem nestajućeg gradijenta) ili, rjeđe, eksponencijalnog rasta
+(problem eksplodirajućeg gradijenta), što otežava stabilnu optimizaciju modela. Čak i ako pretpostavimo
+da su parametri stabilni, utjecaj udaljenih vremenskih koraka postaje eksponencijalno manji u odnosu
+na nedavne, zbog čega mreža teško uči dugoročne ovisnosti \cite{goodfellow2016}.
 
 
 \subsection{LSTM mreže}
 \label{subsec:lstm-mreze}
 
-TODO Općenito objašnjenje LSTM mreža
+U okviru ovog rada koristit ćemo posebnu vrstu povratnih neuronskih mreža koje nazivamo povratna ćelija s
+dugoročnom memorijom \engl{ long short-term memory, LSTM}. LSTM mreže dizajnirane su kako bi
+izbjegle probleme nestajućeg i eksplodirajućeg gradijenta te omogućile učenje dugoročnih ovisnosti
+u sekvencijalnim podatcima. Zbog toga se često primjenjuju u modeliranju vremenskih nizova \cite{colah2015}.
+
+Razmotana LSTM mreža ima strukturu lančanih ćelija karakterističnu za povratne neuronske mreže, no njene
+ponavljajuće ćelije imaju složeniju unutarnju arhitekturu. Umjesto jednog neuronskog sloja, LSTM ćelija
+sastoji se od četiri sloja koji imaju specifičnu interakciju.
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{img/LSTM-chain.png}
+\caption{Arhitektura LSTM mreže \cite{colah2015}}
+\label{fig:lstm-architecture}
+\end{figure}
+Ključni element LSTM arhitekture jest stanje ćelije $\mathbf{C}_t$, koje predstavlja internu memorijsku
+komponentu modela. Ono se propagira kroz vremenske korake koristeći samo linearne transformacije,
+čime se omogućuje stabilniji prijenos informacija i ublažava problem nestajućeg gradijenta.
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.5\textwidth]{img/LSTM-C-line.png}
+\caption{Tok stanja ćelije $\mathbf{C}_t$ \cite{colah2015}}
+\label{fig:lstm-c-line}
+\end{figure}
+Za razliku od standardnog skrivenog stanja u jednostavnim RNN mrežama, stanje ćelije eksplicitno
+je regulirano posebnim mehanizmom vrata \engl{ gate}. LSTM arhitektura koristi tri vrste vrata: vrata
+zaboravljanja, ulazna vrata te izlazna vrata.
+
+
+\subsubsection{Vrata zaboravljanja}
+\label{subsubsec:vrata-zaboravljanja}
+
+Prvi korak u LSTM mreži se odnosi se na određivanje koje informacije iz prethodnog stanja ćelije
+$\mathbf{C}_{t-1}$ treba izbaciti. Ta se odluka donosi pomoću vrata zaboravljanja, koja kao ulaz primaju
+prethodno skriveno stanje $\mathbf{h}_{t-1}$ i trenutačni ulaz $\mathbf{x}_t$. Rezultat je vektor 
+$\mathbf{f}_t$ koji računamo na sljedeći način:
+\begin{equation}
+  \mathbf{f}_t = \sigma\left(\mathbf{W}_f\cdot\left[\mathbf{h}_{t-1},\mathbf{x}_t\right] + \mathbf{b}_f\right).
+\label{eq:forget-gate}
+\end{equation}
+Pošto vrata zaboravljanja koriste sigmoidu kao aktivacijsku funkciju, $\mathbf{f}_t\in[0,1]^n$.
+Elementi stanja $\mathbf{C}_t$ na pozicijama na kojima je vektor $\mathbf{f}_t$ blizu nuli bit
+će zaboravljeni, dok će se oni na pozicijama na kojima je vektor $\mathbf{f}_t$ blizu jedinici
+propustiti u iduće stanje.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.5\textwidth]{img/LSTM-forget-gate.png}
+\caption{Vrata zaboravljanja \cite{colah2015}}
+\label{fig:lstm-forget-gate}
+\end{figure}
+
+
+\subsubsection{Ulazna vrata}
+\label{subsubsec:ulazna-vrata}
+
+U idućem koraku moramo odrediti koju ćemo informaciju iz ulaza $\mathbf{x}_t$ dodati stanju ćelije.
+Ovo radimo u dva koraka:
+\begin{align}
+  \mathbf{i}_t &= \sigma\left(\mathbf{W}_f\cdot\left[\mathbf{h}_{t-1},\mathbf{x}_t\right] + \mathbf{b}_i\right), \\
+  \widetilde{\mathbf{C}}_t &= \tanh\left(\mathbf{W}_C\cdot\left[\mathbf{h}_{t-1},\mathbf{x}_t\right] + \mathbf{b}_C\right).
+\end{align}
+Vektor $\mathbf{i}_t$ određuje koje informacije je potrebno ažurirati, a sloj koji koristi
+tangens hiperbolni računa doprinose $\widetilde{\mathbf{C}}_t$ iz ulaza $\mathbf{x}_t$ koje
+ćemo dodati stanju ćelije $\mathbf{C}_{t-1}$.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.5\textwidth]{img/LSTM-input-gate.png}
+\caption{Ulazna vrata \cite{colah2015}}
+\label{fig:lstm-input-gate}
+\end{figure}
+
+
+\subsubsection{Ažuriranje stanja ćelije}
+\label{subsubsec:azuriranje-celije}
+
+Zatim stanje ćelije zatim ažuriramo na sljedeći način:
+\begin{equation}
+  \mathbf{C}_t = \mathbf{f}_t \odot \mathbf{C}_{t-1} + \mathbf{i}_t \odot \widetilde{\mathbf{C}}_t.
+\end{equation}
+gdje je $\odot$ oznaka za Hadamartov umnožak. Množimo staro stanje s $\mathbf{f}_t$ kako bi zaboravili
+podatke koje smo odredili ranije. Zatim dodamo umnožak $\mathbf{i}_t \odot \widetilde{\mathbf{C}}_t$
+koji predstavlja odabrane doprinose ulaza.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.5\textwidth]{img/LSTM-update-state.png}
+\caption{Ažuriranje stanja ćelije \cite{colah2015}}
+\label{fig:lstm-update-state}
+\end{figure}
+
+
+\subsubsection{Izlazna vrata}
+\label{subsubsec:izlazna-vrata}
+
+Na kraju, izlaz ćelije će se temeljiti na novom stanju ćelije $\mathbf{C}_t$. Prvo ćemo pomoću
+izlaznih vrata $\mathbf{o}_t$ odrediti koje djelove stanja želimo ćemo zadržati na izlazu.
+Potom ćemo stanje ćelije prvo propustit kroz tangens hiperbolni prije nego ga pomnožimo s
+izlaznim vratima:
+\begin{align}
+  \mathbf{o}_t &= \sigma\left(\mathbf{W}_o\cdot\left[\mathbf{h}_{t-1},\mathbf{x}_t\right] + \mathbf{b}_o\right), \\
+  \mathbf{h}_t &= \mathbf{o}_t \odot \tanh\left(\mathbf{C}_t\right)
+\end{align}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.5\textwidth]{img/LSTM-out-gate.png}
+\caption{Izlazna vrata \cite{colah2015}}
+\label{fig:lstm-out-gate}
+\end{figure}
 
 
 %-------------------------------------------------------------------------------
