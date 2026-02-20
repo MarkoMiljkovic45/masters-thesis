@@ -7,6 +7,9 @@
 \usepackage{algorithm}
 \usepackage{algorithmic}
 \usepackage{graphicx}
+\usepackage{booktabs}
+
+\DeclareMathOperator*{\argmin}{arg\,min}
 
 
 %--- PODACI O RADU / THESIS INFORMATION ----------------------------------------
@@ -699,6 +702,56 @@ izlaznim vratima:
 \end{figure}
 
 
+\subsection{Trenirnanje modela dubokog učenja}
+\label{subsec:treniranje-modela}
+
+Svaki algoritam strojnog učenja možemo rastaviti na tri glavne komponente \cite{su1osnovni}. Prvu komponentu,
+odnosno model, možemo definirati kao skup funckija koje su parametrizirane vektorom parametara
+$\boldsymbol{\theta}$:
+\begin{equation}
+  \mathcal{H} = \{h(\mathbf{x};\boldsymbol{\theta})\}_{\boldsymbol{\theta}}.
+\end{equation}
+
+Druga komponenta je funkcija gubitka $L$ \engl{ loss function} s pripadnom funkcijom pogreške:
+\begin{equation}
+  E(\boldsymbol{\theta}|\mathcal{D}) = \frac{1}{N} \sum_{i=1}^{N}L(y^{(i)}, h(\mathbf{x}^{(i)};\boldsymbol{\theta})),
+\end{equation}
+gdje $\mathcal{D}$ predstavlja skup označenih primjera, a $y^{(i)}$ točnu oznaku primjera $\mathbf{x}^{(i)}$.
+Funkcija gubitka za dani vektor parametara $\boldsymbol{\theta}$ govori koliko se izlaz modela razlikuje
+od željenog izlaza.
+
+Treća komponenta je optimizacijski postupak:
+\begin{equation}
+  \boldsymbol{\theta}^* = \argmin_{\boldsymbol{\theta}} E(\boldsymbol{\theta}|\mathcal{D}).
+\end{equation}
+Cilj optimizacijsko postupka je pronalazak vektora parametara $\boldsymbol{\theta}^*$ koji minimiziraju
+funkciju pogreške. Vektor parametara $\boldsymbol{\theta}^*$ jednoznačno određuje funckiju $h^*$.
+
+Jedan konkretan optimizacijski postupak koji se često koristi kod modela dubokog učenja je gradijentni
+spust. Ideja gradijentnog spusta je da se, krenuvši od nasumično incijaliziranog vektora parametara
+$\boldsymbol{\theta}$, postepeno spuštamo niz površinu funkcije pogreške $E(\boldsymbol{\theta}|\mathcal{D})$
+u smjeru suprotnome od gradijenta u točki $\boldsymbol{\theta}$. To ponavljamo dok se ne spustimo u
+točku u kojoj je gradijent jednak ili jako blizu nuli. Pri tome vektor parametara $\boldsymbol{\theta}$
+ažuriramo u vakoj iteraciji na sljedeći način:
+\begin{equation}
+  \boldsymbol{\theta} = \boldsymbol{\theta} - \eta \nabla E(\boldsymbol{\theta}|\mathcal{D})
+\end{equation}
+gdje je $\eta$ stopa učenja koja određuje veličinu koraka koje radimo spuštajući se prema minimumu
+\cite{su1logisticka}.
+
+Međutim fokusiramo li se isključivo na minimiziraju funkciju pogreške pronaći ćemo vektor parametara
+koji je previše prilagođen na podatke i koji neće dobro raditi na podatcima koji nisu bili u skupu za
+treniranje. Želimo pronaći vektor parametara koji će raditi dobro i za neviđene podatke odnosno koji će
+dobro generalizirati. Kako bi to postigli, podijelit ćemo skup primjera na skup za treniranje, validaciju
+i testiranje $\mathcal{D} = \mathcal{D}_{train} \cup \mathcal{D}_{validation} \cup \mathcal{D}_{test}$.
+Potupak optimizacije zatim ćemo provoditi samo na skupu za treniranje $\mathcal{D}_{train}$.
+Nakon što smo napravili podjelu računamo dvije pogreške. Prva je pogreška funckije $h$ na skupu za učenje
+$\mathcal{D}_{train}$, tj. $E(h|\mathcal{D}_{train})$, a druga pogreška funkcije $h$ na skupu za validaciju
+$E(h|\mathcal{D}_{validation})$. Postupak optimizacije zaustavit ćemo nakon što smo dosegnuli minimum pogreške
+na skupu za validaciju. Nakon toga računamo pogrešku na skupu za testiranje $E(h|\mathcal{D}_{test})$ te će
+nam ta vrijednost služiti kao mjera performansi dobivene funkcije $h$. Također pogrešku na skupu za
+testiranje možemo koristiti kako bi objektivno uspoređivali modele.
+
 %-------------------------------------------------------------------------------
 \chapter{Implementacija}
 \label{pog:implementacija}
@@ -714,18 +767,15 @@ njihovom ulogom u implementaciji.
 \caption{Korištene Python biblioteke}
 \label{tab:biblioteke}
 \renewcommand{\arraystretch}{1.5}
-\begin{tabular}{lp{10cm}}
-\hline
-\textbf{Biblioteka} & \textbf{Namjena} \\
-\hline
+\begin{tabular}{lp{10cm}} \toprule
+\textbf{Biblioteka} & \textbf{Namjena} \\ \midrule
 \texttt{hydra-core} & Upravljanje konfiguracijama i pojednostavljenje podešavanja hiperparametara modela \cite{hydra} \\
 \texttt{lightning}  & Pojednostavljenje i ubrzavanje procesa treniranja modela \cite{lightning} \\
 \texttt{matplotlib} & Vizualizacija podataka i rezultata \cite{matplotlib} \\
 \texttt{numpy}      & Rukovanje višedimenzionalnim poljima podataka \cite{numpy} \\
 \texttt{pandas}     & Učitavanje i obrada tabličnih podataka \cite{pandas} \\
 \texttt{scipy}      & Estimacija parametara distribucija i generiranje sintetičkih podataka \cite{scipy} \\
-\texttt{torch}      & Razvoj i treniranje modela strojnog učenja \cite{torch} \\
-\hline
+\texttt{torch}      & Razvoj i treniranje modela strojnog učenja \cite{torch} \\ \bottomrule
 \end{tabular}
 \end{table}
 
@@ -830,7 +880,7 @@ jednu značajku u obliku interakcije:
 \end{align}
 gdje je $\mathbf{1}_n$ vektor jedinica dužine $n$. Neka je
 $\mathbf{X}_k = [\mathbf{X}_{Pk}^\intercal, \mathbf{X}_{Mk}^\intercal, \mathbf{X}_{PMk}^\intercal]$ tenzor
-oblika $25\times60\times3$. Time smo konstruirali ulazni tenzor za naš model.
+oblika $25\times60\times3$. Time smo konstruirali $k$ ulaznih tenzora za naš model.
 
 
 Jedna od funkcija cilja našeg modela je negativna logaritamska izglednost. Za njezin izračun potrebno nam je
@@ -839,24 +889,25 @@ jednofaktorski model povrata (\ref{eq:jednofaktorski}) očekivanje i kovarijacij
 koristeći formule (\ref{eq:ocekivanje-r}) i (\ref{eq:kovarijacijska-r}). Naš model procjenjuje koeficijente
 $\widehat{\boldsymbol{\alpha}}$ i $\widehat{\boldsymbol{\beta}}$, stoga kako bi mogli računati negativnu log
 izglednost moramo još procijeniti $\mu_f$, $\sigma_f^2$ i $\boldsymbol{\Psi}$ iz prozora budućih povrata. S
-obzirom da je naš faktor predstavljaju povrati tržišta, $\mu_{fk}$ i $\sigma_{fk}^2$ procjenjujemo iz prozora
-budućih povrat tržišta $\mathbf{y}_{Mk}$ pomoću izraza (\ref{eq:normalna-sredina}) i
+obzirom da je naš faktor predstavljaju povrati tržišta, $\widehat{\mu}_{fk}$ i $\widehat{\sigma}_{fk}^2$
+procjenjujemo iz prozora budućih povrat tržišta $\mathbf{y}_{Mk}$ pomoću izraza (\ref{eq:normalna-sredina}) i
 (\ref{eq:normalna-varijanca}). Kako bi izračunali procjenu kovarijacijske matrice reziduala
 $\widehat{\boldsymbol{\Psi}}$ primjenjujemo formulu (\ref{eq:multivariatna-sredina-kovarijacijska}) na
 rezidualima $\widehat{\mathbf{E}}$. Kako bi izračunali $\widehat{\mathbf{E}}$ možemo iskoristiti formulu
 (\ref{eq:procjena-reziduala}). Za nju su nam potrebni parametri $\widehat{\boldsymbol{\xi}}^\intercal$ koje
 možemo dobiti primjenom metode najmanjih kvadrata (\ref{eq:ols-matrix}) na $\mathbf{y}_{Mk}$ i
-$\mathbf{Y}_{Pk}$. Time smo dobili procjene za $\widehat{\boldsymbol{\Psi}}_k$. Skup
-$\left\{\mathbf{Y}_{Pk}, \mathbf{y}_{Mk}, \mu_{fk}, \sigma_{fk}^2, \widehat{\boldsymbol{\Psi}}_k\right\}$
-predstavlja ciljne varijable naših $k$ uzorka.
+$\mathbf{Y}_{Pk}$. Nakon što smo dobili parametre $\widehat{\boldsymbol{\xi}}_k^\intercal$ možemo procijeniti
+$\widehat{\boldsymbol{\Psi}}_k$. Skup $\mathbf{Y}_k = \left\{\mathbf{Y}_{Pk}, \mathbf{y}_{Mk},
+\widehat{\mu}_{fk}, \widehat{\sigma}_{fk}^2, \widehat{\boldsymbol{\xi}}_k^\intercal,
+\widehat{\boldsymbol{\Psi}}_k\right\}$ predstavlja ciljne varijable naših $k$ uzorka.
 
 
 \section{Sintetički podatci}
 \label{sec:sinteticki}
 
 Osim stvarnih podataka naš model trenirali smo i na sintetičkim podatcima. Prednost sintetičkih podataka
-je to što ih možemo generirti prozivljno mnogo te znamo stvarne vrijendosti parametara koje pokušavamo
-procijeniti. Kako bi sintetički podatci mogli pomoći modelu u generalizaciji na stvarne podatke moraju biti
+je to što ih možemo generirti prozivljno mnogo te su vrijednosti parametara koje pokušavamo procijeniti
+poznate. Kako bi sintetički podatci mogli pomoći modelu u generalizaciji na stvarne podatke moraju biti
 što sličniji stvarnim podatcima.
 
 Za simulaciju tržišnih povrata odabralismo studentovu $t$-distribuciju s pet stupnjeva slobode. Za procjenu
@@ -870,14 +921,163 @@ $\widehat{\boldsymbol{\alpha}}_k$ i $\widehat{\boldsymbol{\beta}}_k$ promatramo 
 normalnih distribucija $\{\epsilon_i\}_{i=1}^{90\times25\times k}$, $\{\alpha_i\}_{i=1}^{25\times k}$ i
 $\{\beta_i\}_{i=1}^{25\times k}$. Primjenom formula (\ref{eq:normalna-sredina}) i
 (\ref{eq:normalna-varijanca}) dobivamo procjene $\widehat{\mu}_{\epsilon}$, $\widehat{\sigma}_{\epsilon}^2$,
-$\widehat{\mu}_{\alpha}$, $\widehat{\sigma}_{\alpha}^2$, $\widehat{\mu}_{\beta}$ i $\widehat{\sigma}_{\beta}^2$.
-
-TODO Generiranje podataka iz dristribucija
+$\widehat{\mu}_{\alpha}$, $\widehat{\sigma}_{\alpha}^2$, $\widehat{\mu}_{\beta}$ i
+$\widehat{\sigma}_{\beta}^2$. Sintetičke podatke zatim generiramo kako je opisano u tablici
+\ref{tbl:sinteticki}, gdje je $N$ željeni broj uzoraka, a $p$ broj simuliranih portfelja.
+\begin{table}
+\caption{Generiranje sintetičkih podataka}
+\label{tbl:sinteticki}
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{ccl} \toprule
+  \textbf{Vektor uzoraka} & \textbf{Distribucija} & \textbf{Broj uzoraka} \\ \midrule
+  $\mathbf{R}_{MS}$ & $t_5(\widehat{\mu}_M, \widehat{\sigma}_M^2)$ & $N\times90$ \\
+  $\boldsymbol{\epsilon}_S$ & $\mathcal{N}(\widehat{\mu}_{\epsilon}, \widehat{\sigma}_{\epsilon}^2)$ & $N\times90\times p$ \\
+  $\boldsymbol{\alpha}_S$ & $\mathcal{N}(\widehat{\mu}_{\alpha}, \widehat{\sigma}_{\alpha}^2)$ & $p$ \\
+  $\boldsymbol{\beta}_S$ & $\mathcal{N}(\widehat{\mu}_{\beta}, \widehat{\sigma}_{\beta}^2)$ & $p$ \\ \bottomrule
+\end{tabular}
+\end{table}
+Nakon toga vektor $\boldsymbol{\epsilon}_S$ preoblikujemo u matricu $\mathbf{E}_S$ oblika
+$(N\times90)\times p$. Generirani vektor $\mathbf{R}_{MS}$ predstavlja povrate tržišta $\mathbf{R}_{M}$,
+a simulirane povrate portfelja $\mathbf{R}_{P25}$ dobivamo na sljedeći način:
+\begin{align}
+  \mathbf{A}_S &= \mathbf{1}_{N\times90} \cdot \boldsymbol{\alpha}_S^\intercal \quad \text{matrica $(N\times90)\times p$}, \\
+  \mathbf{R}_{PS} &= \mathbf{A}_S + \mathbf{R}_{MS}\boldsymbol{\beta}_S^\intercal + \mathbf{E}_S
+\end{align}
+Nakon što imamo povrate tržišta $\mathbf{R}_{MS}$ i portfelja $\mathbf{R}_{PS}$ možemo ponoviti korake
+iz poglavlja \ref{sec:obrada-podataka} kako bi generiali ulazne tenzore i ciljne varijable. Postoje samo
+dvije razlike. Kod sintetičkih podataka korak kliznog prozora postavljamo na 90 jer nema razloga da nam se
+sintetički podatci preklapaju. Kod procjenu kovarijacijske matrice reziduala $\widehat{\boldsymbol{\Psi}}$
+nema potrebe da procjenjujemo parametre $\widehat{\boldsymbol{\xi}}$ metodom najmanjih kvadrata jer su
+nam oni već poznati $\boldsymbol{\xi} = \left[\boldsymbol{\alpha}_S,\: \boldsymbol{\beta}_S\right]$.
 
 \section{Model dubokog učenja}
 \label{sec:model-dubokog-ucenja}
 
-TODO Objasniti arhitekturu našeg modela i različite funkcije cilja
+TODO Razradit ovaj paragraf
+
+Naš model sastoji se od enkodera i nekoliko različitih dekodera prilagođenih različitim funckijama
+gubitka. S obzirom na ovu arhitekturu naš model smatramo generativnim modelom. Enkoder naučiti distribuciju
+budućih povrata za dane povijesne te iz toga pokušava procijeniti parametre jednofaktorskog modela.
+Nakon što imamo parametre možemo generirati razne prognoze i testirati različite scenarije.
+
+\subsubsection{Enkoder}
+\label{subsubsec:enkoder}
+
+Glavna komponenta našeg modela je enkoder koji se sastoji od jedne LSTM jedinice i dva linearna
+sloja. Neka je $\mathbf{X}_{ki}$ $i$-ta od $p$ matrica iz tenzora $\mathbf{X}_k$ gdje je $p$ broj
+portfelja i prva dimenzija tenzora $\mathbf{X}_k$. Matrica $\mathbf{X}_{ki}$ ima oblik $60\times3$ i
+sadrži 60 povrata $i$-tog portfelja, tržišta te njihov produkt za $k$-ti prozor podataka. Enkoder
+na ulazu prima ta tri vremenska niza i prosljeđuje ih LSTM jedinici. Potom uzimamo posljednje skriveno
+stanje LSTM jedinice $\mathbf{h}_{60}$ i stavljamo ga na ulaz dva zasebna linearna sloja. Zadaća linearnih
+slojeva je procijeniti koeficijente $\alpha_i$ i $\beta_i$ jednofaktorskog modela koji najbolje odgovarati
+budućem prozoru povrata iz posljednjeg skrivenog stanja $\mathbf{h}_{60}$. Slika \ref{fig:encoder}
+prikazuje arhitekturu enkodera. Enkoderu također možemo primjeniti na čitav tenzor $\mathbf{X}_k$ čime
+dobivamo vektore $\boldsymbol{\alpha}$ i $\boldsymbol{\beta}$, odnosno procjenu koeficijenata $\alpha_i$
+i $\beta_i$ za svih $p$ portfelja.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{img/encoder.pdf}
+\caption{Enkoder}
+\label{fig:encoder}
+\end{figure}
+
+
+\subsubsection{Dekoderi i funckije gubitka}
+\label{subsubsec:dekoderi}
+
+U ovom radu ispitali smo tri različite funckije gubitka od kojih je svaka zahtjevala zaseban dekoder.
+Prva funckija gubitka je srednja kvadratna pogreška \engl{ mean squared error, MSE}. Srednju kvadratnu
+pogrešku našeg modela računat ćemo na sljedeći način:
+\begin{equation}
+  \mathrm{MSE}\left(\widehat{\mathbf{Y}}_{Pk}, \mathbf{Y}_{Pk}\right) = \frac{1}{p\times30} \sum_{i=1}^{p}
+  \sum_{j=1}^{30} \left(\mathbf{Y}_{Pk}^{(j,i)} - \widehat{\mathbf{Y}}_{Pk}^{(j,i)}\right)^2,
+\end{equation}
+gdje je $\mathbf{Y}_{Pk}^{(j,i)}$ element matrice $\mathbf{Y}_{Pk}$ u $i$-tom stupcu i $j$-tom retku.
+Kako bi mogli izračunati srednju kvadratnu pogrešku prvi dekoder će izračunati $\widehat{\mathbf{Y}}_{Pk}$
+na sljedeći način:
+\begin{equation}
+  \widehat{\mathbf{Y}}_{Pk} = \mathbf{1}_{30} \cdot \boldsymbol{\alpha}^\intercal + \mathbf{y}_{Mk} \cdot
+  \boldsymbol{\beta}^\intercal.
+\end{equation}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{img/mse-decoder.pdf}
+\caption{MSE Dekoder}
+\label{fig:mse-decoder}
+\end{figure}
+
+Druga funckija gubitka je negativna logaritamsku izglednost \engl{ negative log likelihood, NLL}. Negativnu
+logaritamsku izglednost našeg modela računamo na sljedeći način:
+\begin{equation}
+  \mathrm{NLL}\left(\widehat{\boldsymbol{\mu}}, \widehat{\boldsymbol{\Sigma}}^{-1}, \mathbf{Y}_{Pk}\right)
+  = -\frac{1}{30} \ln \mathcal{L} \left(\widehat{\boldsymbol{\mu}}, \widehat{\boldsymbol{\Sigma}}^{-1};
+  \mathbf{Y}_{Pk}\right).
+\end{equation}
+Drugi dekoder računa procjene $\widehat{\boldsymbol{\mu}}$ i $\widehat{\boldsymbol{\Sigma}}^{-1}$
+primjenjujući formule (\ref{eq:ocekivanje-r}) i (\ref{eq:kovarijacijska-r}) na $\boldsymbol{\alpha}$,
+$\boldsymbol{\beta}$ i podatke iz skupa $\mathbf{Y}_k$. Kod računanja inverza
+$\widehat{\boldsymbol{\Sigma}}^{-1}$ poslužili smo se Woodburyjevom lemom o invertiranju matrica
+\cite{statlect-woodbury}.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{img/nll-decoder.pdf}
+\caption{NLL Dekoder}
+\label{fig:nll-decoder}
+\end{figure}
+
+Treća funckija gubitka je zapravo samo kombinacija srednje kvadratne pogreške i negativne logaritamske
+izglednosti te je računamo na idući način:
+\begin{equation}
+  \mathrm{COMBINED}\left(\widehat{\mathbf{Y}}_{Pk}, \mathbf{Y}_{Pk}, \widehat{\boldsymbol{\mu}},
+  \widehat{\boldsymbol{\Sigma}}^{-1}\right) = \mathrm{NLL}\left(\widehat{\boldsymbol{\mu}},
+  \widehat{\boldsymbol{\Sigma}}^{-1}, \mathbf{Y}_{Pk}\right) +
+  \zeta\times\mathrm{MSE}\left(\widehat{\mathbf{Y}}_{Pk}, \mathbf{Y}_{Pk}\right),
+\end{equation}
+gdje koeficijent $\zeta$ određuje doprinos srednje kvadratne pogreške. Zbog tog je treći dekoder zapravo
+samo objedinjenje prvog i drugog dekodera u jedan veći dekoder.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{img/combined-decoder.pdf}
+\caption{Kombinirani Dekoder}
+\label{fig:combined-decoder}
+\end{figure}
+
+
+\subsubsection{Računanje ukupnog gubitka modela}
+\label{subsubsec:racunanje-ukupnog}
+
+Sva tri dekodera našeg modela na ulazu prima podatke iz skupa $\mathbf{Y}_k$ i vektore procjenjenih
+koeficijenata $\boldsymbol{\alpha}$ i $\boldsymbol{\beta}$ koje dobivamo na izlazu enkodera. Osim izlaza
+enkodera, skup $\mathbf{Y}_k$ također sadrži vektore parametara $\boldsymbol{\alpha}_k$ i
+$\boldsymbol{\beta}_k$ koji se nalaze u matrici parametara $\widehat{\boldsymbol{\xi}}_k^\intercal$.
+Ti paramtetri procjenjeni su metodom najmanjih kvadrata ne budućem prozoru povrata. Naš cilj je da model
+daje jednako kvalitetne procjene parametara kao i metoda najmanjih kvadrata ne budućem prozoru povrata,
+ali koristeći samo povijesni prozor povrata. Stoga ćemo gubitak izračunat na parametrima
+$\boldsymbol{\alpha}_k$ i $\boldsymbol{\beta}_k$ smatrati osnovnom razinom gubitka.
+
+Neka je $\mathbf{o}_{xk}$ izlaz dekodera za ulazne vektore $\boldsymbol{\alpha}$ i $\boldsymbol{\beta}$
+dobivene primjenom enkodera na tenzor $\mathbf{X}_k$, a $\mathbf{o}_{yk}$ izlaz dekodera za ulazne vektore
+$\boldsymbol{\alpha}_k$ i $\boldsymbol{\beta}_k$ dobivene iz skupa $\mathbf{Y}_k$. Ukupan gubitak modela
+koji koristimo u postupku optimizacije za primjer $k$ tada računamo na sljedeći način:
+\begin{equation}
+  \mathrm{LOSS}_{TOTAL}\left(\mathbf{o}_{xk}, \mathbf{o}_{yk}, \mathbf{Y}_{Pk}\right) =
+  \mathrm{LOSS}\left(\mathbf{o}_{xk}, \mathbf{Y}_{Pk}\right) -
+  \mathrm{LOSS}\left(\mathbf{o}_{yk}, \mathbf{Y}_{Pk}\right)
+\end{equation}
+Općenit oblik našeg modela tada možemo prikazati slikom \ref{fig:general-model}.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{img/general-model.pdf}
+\caption{Općeniti oblik modela}
+\label{fig:general-model}
+\end{figure}
+
 
 %-------------------------------------------------------------------------------
 \chapter{Rezultati}
