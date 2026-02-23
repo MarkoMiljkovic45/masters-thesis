@@ -8,6 +8,7 @@
 \usepackage{algorithmic}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{multirow}
 
 \DeclareMathOperator*{\argmin}{arg\,min}
 
@@ -15,10 +16,10 @@
 %--- PODACI O RADU / THESIS INFORMATION ----------------------------------------
 
 % Naslov na engleskom jeziku / Title in English
-\title{TBD}
+\title{Generative models for financial time series based on latent factors}
 
 % Naslov na hrvatskom jeziku / Title in Croatian
-\naslov{TBD}
+\naslov{Generativni modeli za financijske vremenske nizove zasnovani na latentnim faktorima}
 
 % Broj rada / Thesis number
 \brojrada{1234}
@@ -79,7 +80,7 @@ TODO Uvod.
 \label{pog:metodologija}
 
 Ovo poglavlje pokriva teoretsku osnovu potrebnu za razumijevanje implementiranog modela dubokog učenja te 
-strukturu podataka na kojima se primjenjuje. Prvo ćemo definirati osnovne varijable koje ćeemo se oslanjati
+strukturu podataka na kojima se primjenjuje. Prvo ćemo definirati osnovne varijable koje ćemo se oslanjati
 u ovom radu. Zatim ćemo proučiti njihova statistička svojstva. Nakon toga razmotrit ćemo faktorske modele
 koji omogućuju modeliranje naših varijabli. Na kraju ćemo pokriti duboko učenje i specifičnu arhitekturu
 koja će se koristiti u ovom radu.
@@ -452,7 +453,7 @@ redak $\boldsymbol{\epsilon}_t^\intercal$ \cite{tsay2010}.
 S obzirom da nas zanimaju \emph{makroekonomski faktorski modeli} čiji su faktori $\mathbf{f}_t$
 osmotrivi, jednadžba (\ref{eq:faktorski-matricna-ukupna}) ima oblik višestruke multivariatne
 linearne regresije. Zbog toga parametre modela možemo estimirati metodom najmanjih kvadrata
-\cite{johnson2002}:
+\engl{ ordinary least squares, OLS} \cite{johnson2002}:
 \begin{equation}
     \widehat{\boldsymbol{\xi}^\intercal} = \begin{bmatrix}
       \;\widehat{\boldsymbol{\alpha}}^\intercal\; \\
@@ -461,7 +462,7 @@ linearne regresije. Zbog toga parametre modela možemo estimirati metodom najman
 \label{eq:ols-matrix}
 \end{equation}
 odakle su $\boldsymbol{\alpha}$ i $\boldsymbol{\beta}$ lako dostupni. Reziduale, odnosno
-povrate idiosinkratskih faktora možemo lako dobiti koristeći formulu (\ref{eq:faktorski-matricna-ukupna}):
+povrate idiosinkratskih faktora možemo dobiti koristeći formulu (\ref{eq:faktorski-matricna-ukupna}):
 \begin{equation}
   \widehat{\mathbf{E}} = \mathbf{R} - \mathbf{G}\widehat{\boldsymbol{\xi}}^\intercal.
 \label{eq:procjena-reziduala}
@@ -565,10 +566,11 @@ skriveno stanje $\mathbf{h}_t$ ovisi o trenutnom ulazu $\mathbf{x}_t$ i stanju $
 Slika \ref{fig:unrolled-rnn} prikazuje dijagram jednostavne povratne neuronske mreže i njezin razmotani
 \engl{ unrolled} oblik kroz vremenske korake. Povratnu neuronsku mrežu moguće je promatrati kao višestruke
 kopije iste neuronske mreže, pri čemu svaka kopija prosljeđuje informaciju svojoj sljedbenici u idućem
-vremenskom koraku. U razmotanom prikazu jasno se vidi da se u svakom koraku primjenjuje ista RNN ćelija A
-s istim parametrima, dok skriveno stanje predstavlja viđeni dio slijeda koja se prenosi kroz vrijeme.
-Na taj način model zadržava informaciju o prethodnim ulazima te postupno akumulira kontekst,
-što mu omogućuje modeliranje ovisnosti unutar sekvence, neovisno o njezinoj duljini \cite{colah2015}.
+vremenskom koraku. U razmotanom prikazu jasno se vidi da se u svakom koraku primjenjuje ista RNN ćelija 
+označena slovom A s istim parametrima u svakom koraku, dok skriveno stanje predstavlja viđeni dio slijeda
+koja se prenosi kroz vrijeme. Na taj način model zadržava informaciju o prethodnim ulazima te postupno
+akumulira kontekst, što mu omogućuje modeliranje ovisnosti unutar sekvence, neovisno o njezinoj
+duljini \cite{colah2015}.
 
 Jednostavni povratni model možemo definirati sljedećim jednadžbama:
 \begin{align}
@@ -614,7 +616,7 @@ komponentu modela. Ono se propagira kroz vremenske korake koristeći samo linear
 \label{fig:lstm-c-line}
 \end{figure}
 Za razliku od standardnog skrivenog stanja u jednostavnim RNN mrežama, stanje ćelije eksplicitno
-je regulirano posebnim mehanizmom vrata \engl{ gate}. LSTM arhitektura koristi tri vrste vrata: vrata
+je regulirano posebnim mehanizmima vrata \engl{ gate}. LSTM arhitektura koristi tri vrste vrata: vrata
 zaboravljanja, ulazna vrata te izlazna vrata.
 
 
@@ -629,8 +631,8 @@ $\mathbf{f}_t$ koji računamo na sljedeći način:
   \mathbf{f}_t = \sigma\left(\mathbf{W}_f\cdot\left[\mathbf{h}_{t-1},\mathbf{x}_t\right] + \mathbf{b}_f\right).
 \label{eq:forget-gate}
 \end{equation}
-Pošto vrata zaboravljanja koriste sigmoidu kao aktivacijsku funkciju, $\mathbf{f}_t\in[0,1]^n$.
-Elementi stanja $\mathbf{C}_t$ na pozicijama na kojima je vektor $\mathbf{f}_t$ blizu nuli bit
+Pošto vrata zaboravljanja koriste sigmoidu kao aktivacijsku funkciju, $\mathbf{f}_t\in[0,1]^n$,
+elementi stanja $\mathbf{C}_t$ na pozicijama na kojima je vektor $\mathbf{f}_t$ blizu nuli bit
 će zaboravljeni, dok će se oni na pozicijama na kojima je vektor $\mathbf{f}_t$ blizu jedinici
 propustiti u iduće stanje.
 
@@ -686,7 +688,7 @@ koji predstavlja odabrane doprinose ulaza.
 \label{subsubsec:izlazna-vrata}
 
 Na kraju, izlaz ćelije će se temeljiti na novom stanju ćelije $\mathbf{C}_t$. Prvo ćemo pomoću
-izlaznih vrata $\mathbf{o}_t$ odrediti koje djelove stanja želimo ćemo zadržati na izlazu.
+izlaznih vrata $\mathbf{o}_t$ odrediti koje djelove stanja želimo zadržati na izlazu.
 Potom ćemo stanje ćelije prvo propustit kroz tangens hiperbolni prije nego ga pomnožimo s
 izlaznim vratima:
 \begin{align}
@@ -724,7 +726,7 @@ Treća komponenta je optimizacijski postupak:
 \begin{equation}
   \boldsymbol{\theta}^* = \argmin_{\boldsymbol{\theta}} E(\boldsymbol{\theta}|\mathcal{D}).
 \end{equation}
-Cilj optimizacijsko postupka je pronalazak vektora parametara $\boldsymbol{\theta}^*$ koji minimiziraju
+Cilj optimizacijskog postupka je pronalazak vektora parametara $\boldsymbol{\theta}^*$ koji minimiziraju
 funkciju pogreške. Vektor parametara $\boldsymbol{\theta}^*$ jednoznačno određuje funckiju $h^*$.
 
 Jedan konkretan optimizacijski postupak koji se često koristi kod modela dubokog učenja je gradijentni
@@ -757,7 +759,7 @@ testiranje možemo koristiti kako bi objektivno uspoređivali modele.
 \label{pog:implementacija}
 
 U ovom poglavlju opisana je programska implementacija predloženog rješenja te alati i biblioteke koje su
-omogućile učinkovitu izgradnju, treniranje i evaluaciju modela. Implementacija je realizirana u programskom
+omogućile izgradnju, treniranje i evaluaciju modela. Implementacija je realizirana u programskom
 jeziku Python 3 zbog njegove široke primjene u području strojnog učenja i bogatog ekosustava znanstvenih
 biblioteka. U tablici \ref{tab:biblioteke} su navedene glavne biblioteke korištene u radu, zajedno s
 njihovom ulogom u implementaciji.
@@ -783,10 +785,12 @@ njihovom ulogom u implementaciji.
 \section{Podatci}
 \label{sec:podatci}
 
-Kao što je najavljeno u potpoglavlju \ref{subsec:jednofaktorski}, model implementiran u ovom radu temelji
-se na jednofaktorskom modelu povrata. Budući da se u modelu procjenjuju koeficijenti $\alpha_i$ i $\beta_i$,
-na ulazu su potrebni povrati tržišta i dionica iznad bezrizične kamatne stope. Svi korišteni podatci preuzeti
-su iz baze podataka dostupne na mrežnim stranicama Kenetha R. Frencha \cite{fammafrench}.
+Model implementiran u ovom radu temelji se na jednofaktorskom modelu povrata. Budući da se u modelu
+procjenjuju koeficijenti $\alpha_i$ i $\beta_i$, na ulazu su potrebni povrati tržišta i dionica iznad
+bezrizične kamatne stope. S obzirom da će se ovaj rad fokusirati na dnevne povrate, razlika između
+artimetičkih i logaritamskih je gotovo zanemariva. Stoga biramo dvenve artimetičke povrate za ovaj rad.
+Svi korišteni podatci preuzeti su iz baze podataka dostupne na mrežnim stranicama
+Kenetha R. Frencha \cite{fammafrench}.
 
 
 \subsubsection{Tržišni povrati}
@@ -796,10 +800,9 @@ Podatci o dnevnim artimetičkim tržišnim povratima i denvneoj bezrizičnoj kam
 skupa podataka \emph{Fama/French 3 Factors [Daily]}.
 
 Tržišni povrat definiran je kao vrijednosno otežani \engl{ value weighted} povrat svih poduzeća iz baze
-CRSP inkorporiranih u SAD-u i izlistanih na burzama NYSE, AMEX ili NASDAQ, uz zadovoljenje kriterija
-kvalitete podataka. Takva konstrukcija tržišnog portfelja po svojoj strukturi i obuhvatu vrlo je slična
-indeksu koji prati SPDR S\&P 500 ETF, budući da oba predstavljaju široko diverzificirani presjek
-američkog tržišta kapitala.
+CRSP inkorporiranih u SAD-u i izlistanih na burzama NYSE, AMEX ili NASDAQ. Takva konstrukcija tržišnog
+portfelja po svojoj strukturi i obuhvatu vrlo je slična indeksu koji prati SPDR S\&P 500 ETF, budući da
+oba predstavljaju široko diverzificirani presjek američkog tržišta kapitala.
 
 Bezrizična kamatna stopa definirana je kao prinos na jednomjesečni američki trezorski zapis. Do svibnja
 2024. godine podatci potječu od Ibbotson Associates, dok se od lipnja 2024. godine koristi referentna stopa
@@ -819,9 +822,9 @@ svake godine kao presjeci:
   \item pet kvintila prema omjeru BE/ME
 \end{itemize}
 
-U ovom radu koriste se povrati portfelja, a ne pojedinačnih dionica. Razlog tome je što pojedinačne dionice
-tijekom vremena ulaze i izlaze s tržišta, što može uzrokovati probleme u konstrukciji uravnoteženih
-vremenskih nizova.
+U ovom radu koriste se povrati navedenih portfelja, a ne pojedinačnih dionica. Razlog tome je
+što pojedinačne dionice tijekom vremena ulaze i izlaze s tržišta, što može uzrokovati probleme u
+konstrukciji uravnoteženih vremenskih nizova.
 
 
 \section{Obrada podataka}
@@ -829,22 +832,27 @@ vremenskih nizova.
 
 U ovom potpoglavlju ćemo opisati kako od podataka navedenih u potpoglavlju \ref{sec:podatci} konstruirati
 značajke za naš model. Prvo nakon što smo učitali podatke o artimetičkim povratima tržišta, portfelja i
-bezrizičnu kamatnu stopu, uklanjamo nedostajuće podatke. U našim podatcima to su retci u kojima se nalaze
-vrijednosi -99.99 ili -999. Podatke zatim filtriramo na raspon od 1. 1. 1950. do 28. 11. 2025. uključivo.
+bezrizičnu kamatnu stopu, uklanjamo nedostajuće podatke. U našim podatcima su to retci u kojima se nalaze
+vrijednosti -99.99 ili -999. Podatke zatim filtriramo na raspon od 1. 1. 1950. do 28. 11. 2025. uključivo.
 Odbacujemo podatke prije 1950. godine jer je presjek prvog kvintila po tržišnoj kapitalizaciji i prvog
 kvintila po omjeru BE/ME bio jako nestabilan\footnote{U tim periodima se taj presjek sastojao od svega
-nekoliko dionica}.
+nekoliko dionica}. Preuzeti podatci izraženi su u postotcima umjesto u skalarnim vrijednostima stoga ćemo
+sve podatke podijeliti sa 100.
 
-Sljedeći korak je od povrata tržišta i portfelja oduzeti bezrizičnu kamatnu stopu kako bi dobili povrate iznad 
-bezrizične kamatne stope. Neka je $R_{Mt}$ dnevni artimetički povrata iznad bezrizične kamatne stope tržišta u
-trenutku $t$, a $R_{it}$ dnevni artimetički povrata iznad bezrizične kamatne stope portfelja $i$ u trenutku
-$t$. Definirajmo zatim vektore $\mathbf{R}_M = \left(R_{M1}, \dots R_{MT}\right)^\intercal$ i
-$\mathbf{R}_i = \left(R_{i1}, \dots, R_{iT}\right)^\intercal$ te matricu
-$\mathbf{R}_{P25} = [\mathbf{R}_1, \dots, \mathbf{R}_{25}]$ oblika $T \times 25$, gdje je $T$ ukupan broj
-dnevnih povrata u našim podatcima.
+S obzirom da je od povrata tržišta već oduzeta bezrizična kamatna stopa, još nam preostaje oduzeti bezrizičnu
+kamatnu stopu od povrata portfelja kako bi dobili povrate iznad bezrizične kamatne stope. Neka je $R_{Mt}$
+dnevni artimetički povrata iznad bezrizične kamatne stope tržišta u trenutku $t$, a $R_{it}$ dnevni
+artimetički povrata iznad bezrizične kamatne stope portfelja $i$ u trenutku $t$. Definirajmo zatim
+vektore $\mathbf{R}_M = \left(R_{M1}, \dots R_{MT}\right)^\intercal$ i $\mathbf{R}_i = \left(R_{i1},
+\dots, R_{iT}\right)^\intercal$ te matricu $\mathbf{R}_{P25} = [\mathbf{R}_1, \dots, \mathbf{R}_{25}]$
+oblika $T \times 25$, gdje je $T$ ukupan broj dnevnih povrata u našim podatcima.
 
-U idućem koraku vektor $\mathbf{R}_M$ i matricu $\mathbf{R}_{P25}$ potrebno je uzorkovati kliznim prozorom
-duljine 90 i korakom 30:
+U ovom radu odlučili smo se uzorkovati podatke kliznim prozorom duljine 90. Prozore ćemo zatim
+podijeliti tako da prvih 60 povrata smatramo povijesnim povratima, a posljednjih 30 budućim povratima.
+Za duljinu koraka kliznog prozora uzeli smo 30 kao kompromis između preklapanja prozora i broja uzorka.
+S obzirom da je duljina koraka jednaka duljini prozora budućih povrata, osigurali smo da se barem
+vrijednosti u prozoru budućih povrata ne preklapaju.
+Uzorkovanje vektora $\mathbf{R}_M$ i matrice $\mathbf{R}_{P25}$ postižemo na sljedeći način:
 \begin{align}
   \mathbf{w}_{Mk} &= (R_{Mi}, \dots, R_{M(i+89)})^\intercal &i=30k+1; \quad 0 \le k \le \left\lfloor\frac{T-90}{30}\right\rfloor, k \in \mathbb{Z}  \\
   \mathbf{W}_{Pk} &= \begin{bmatrix}
@@ -867,10 +875,7 @@ način da prvih 60 povrata prozora uzimamo kao povijesne povrate,a posljednjih 3
       \; \mathbf{W}_{Pk}^{(90)} \;
     \end{bmatrix},
 \end{align}
-gdje $w_{Mki}$ $i$-ti element vektora $\mathbf{w}_{Mk}$. Primjeti da se podatci, zbog preklapanja prozora, iz
-$\mathbf{R}_M$ i $\mathbf{R}_{P25}$ ponavljaju u uzorkovanim podatcima. To preklapanje je nužno kako bi imali
-dovoljno uzorka za model. Korak kliznog prozora jednak je veličini budućih prozora kako se barem oni nebi
-preklapali.
+gdje $w_{Mki}$ $i$-ti element vektora $\mathbf{w}_{Mk}$.
 
 Prije nego što povijesni prozori $\mathbf{x}_{Mk}$ i $\mathbf{X}_{Pk}$ budu spremni za naš model, dodajemo još
 jednu značajku u obliku interakcije:
@@ -889,7 +894,7 @@ jednofaktorski model povrata (\ref{eq:jednofaktorski}) očekivanje i kovarijacij
 koristeći formule (\ref{eq:ocekivanje-r}) i (\ref{eq:kovarijacijska-r}). Naš model procjenjuje koeficijente
 $\widehat{\boldsymbol{\alpha}}$ i $\widehat{\boldsymbol{\beta}}$, stoga kako bi mogli računati negativnu log
 izglednost moramo još procijeniti $\mu_f$, $\sigma_f^2$ i $\boldsymbol{\Psi}$ iz prozora budućih povrata. S
-obzirom da je naš faktor predstavljaju povrati tržišta, $\widehat{\mu}_{fk}$ i $\widehat{\sigma}_{fk}^2$
+obzirom da naš faktor predstavljaju povrati tržišta, $\widehat{\mu}_{fk}$ i $\widehat{\sigma}_{fk}^2$
 procjenjujemo iz prozora budućih povrat tržišta $\mathbf{y}_{Mk}$ pomoću izraza (\ref{eq:normalna-sredina}) i
 (\ref{eq:normalna-varijanca}). Kako bi izračunali procjenu kovarijacijske matrice reziduala
 $\widehat{\boldsymbol{\Psi}}$ primjenjujemo formulu (\ref{eq:multivariatna-sredina-kovarijacijska}) na
@@ -915,7 +920,7 @@ $\mu_M$ i $\sigma_M^2$ koristili smo procjenu najveće izglednosti koju nudi bib
 podatcima $\mathbf{R}_M$. Primjenjivanjem metode najmanjih kvadrata (\ref{eq:ols-matrix}) na
 $\mathbf{W}_{Mk}$ i $\mathbf{W}_{Pk}$ dobivamo $k$ parametara $\widehat{\boldsymbol{\xi}}_k$.
 To nam omogućuje da uz formulu (\ref{eq:procjena-reziduala}) dobijemo $k$ reziduala $\widehat{\mathbf{E}}_k$.
-Iz parametra $\widehat{\boldsymbol{\xi}}_k$ su lako dostupni $\widehat{\boldsymbol{\alpha}}_k$ i
+Iz parametra $\widehat{\boldsymbol{\xi}}_k$ lako su dostupni $\widehat{\boldsymbol{\alpha}}_k$ i
 $\widehat{\boldsymbol{\beta}}_k$. Potom sve elemente $\widehat{\mathbf{E}}_k$,
 $\widehat{\boldsymbol{\alpha}}_k$ i $\widehat{\boldsymbol{\beta}}_k$ promatramo kao realizacije triju
 normalnih distribucija $\{\epsilon_i\}_{i=1}^{90\times25\times k}$, $\{\alpha_i\}_{i=1}^{25\times k}$ i
@@ -944,7 +949,7 @@ a simulirane povrate portfelja $\mathbf{R}_{P25}$ dobivamo na sljedeći način:
   \mathbf{A}_S &= \mathbf{1}_{N\times90} \cdot \boldsymbol{\alpha}_S^\intercal \quad \text{matrica $(N\times90)\times p$}, \\
   \mathbf{R}_{PS} &= \mathbf{A}_S + \mathbf{R}_{MS}\boldsymbol{\beta}_S^\intercal + \mathbf{E}_S
 \end{align}
-Nakon što imamo povrate tržišta $\mathbf{R}_{MS}$ i portfelja $\mathbf{R}_{PS}$ možemo ponoviti korake
+Nakon što imamo povrate tržišta $\mathbf{R}_{MS}$ i povrate portfelja $\mathbf{R}_{PS}$ možemo ponoviti korake
 iz poglavlja \ref{sec:obrada-podataka} kako bi generiali ulazne tenzore i ciljne varijable. Postoje samo
 dvije razlike. Kod sintetičkih podataka korak kliznog prozora postavljamo na 90 jer nema razloga da nam se
 sintetički podatci preklapaju. Kod procjenu kovarijacijske matrice reziduala $\widehat{\boldsymbol{\Psi}}$
@@ -954,12 +959,11 @@ nam oni već poznati $\boldsymbol{\xi} = \left[\boldsymbol{\alpha}_S,\: \boldsym
 \section{Model dubokog učenja}
 \label{sec:model-dubokog-ucenja}
 
-TODO Razradit ovaj paragraf
-
 Naš model sastoji se od enkodera i nekoliko različitih dekodera prilagođenih različitim funckijama
-gubitka. S obzirom na ovu arhitekturu naš model smatramo generativnim modelom. Enkoder naučiti distribuciju
-budućih povrata za dane povijesne te iz toga pokušava procijeniti parametre jednofaktorskog modela.
-Nakon što imamo parametre možemo generirati razne prognoze i testirati različite scenarije.
+gubitka. S obzirom na takvu arhitekturu naš model možemo smatrati generativnim modelom.
+Dovođenjem simuliranih podataka na dekoder zajedno s izlazom enkodera dobivene izlaze možemo koristiti
+za testiranje različitih scenarija te za upravljanje rizikom.
+
 
 \subsubsection{Enkoder}
 \label{subsubsec:enkoder}
@@ -991,10 +995,11 @@ U ovom radu ispitali smo tri različite funckije gubitka od kojih je svaka zahtj
 Prva funckija gubitka je srednja kvadratna pogreška \engl{ mean squared error, MSE}. Srednju kvadratnu
 pogrešku našeg modela računat ćemo na sljedeći način:
 \begin{equation}
-  \mathrm{MSE}\left(\widehat{\mathbf{Y}}_{Pk}, \mathbf{Y}_{Pk}\right) = \frac{1}{p\times30} \sum_{i=1}^{p}
+  L_{MSE}\left(\widehat{\mathbf{Y}}_{Pk}, \mathbf{Y}_{Pk}\right) = \frac{1}{p\times30} \sum_{i=1}^{p}
   \sum_{j=1}^{30} \left(\mathbf{Y}_{Pk}^{(j,i)} - \widehat{\mathbf{Y}}_{Pk}^{(j,i)}\right)^2,
 \end{equation}
 gdje je $\mathbf{Y}_{Pk}^{(j,i)}$ element matrice $\mathbf{Y}_{Pk}$ u $i$-tom stupcu i $j$-tom retku.
+Pogrešku uprosječujemo po svih $p$ portfelja i svih 30 trenutaka iz prozora budućih povrata.
 Kako bi mogli izračunati srednju kvadratnu pogrešku prvi dekoder će izračunati $\widehat{\mathbf{Y}}_{Pk}$
 na sljedeći način:
 \begin{equation}
@@ -1009,13 +1014,17 @@ na sljedeći način:
 \label{fig:mse-decoder}
 \end{figure}
 
-Druga funckija gubitka je negativna logaritamsku izglednost \engl{ negative log likelihood, NLL}. Negativnu
+Druga funckija gubitka je negativna logaritamska izglednost \engl{ negative log likelihood, NLL}. Negativnu
 logaritamsku izglednost našeg modela računamo na sljedeći način:
 \begin{equation}
-  \mathrm{NLL}\left(\widehat{\boldsymbol{\mu}}, \widehat{\boldsymbol{\Sigma}}^{-1}, \mathbf{Y}_{Pk}\right)
+  L_{NLL}\left(\widehat{\boldsymbol{\mu}}, \widehat{\boldsymbol{\Sigma}}^{-1}, \mathbf{Y}_{Pk}\right)
   = -\frac{1}{30} \ln \mathcal{L} \left(\widehat{\boldsymbol{\mu}}, \widehat{\boldsymbol{\Sigma}}^{-1};
   \mathbf{Y}_{Pk}\right).
 \end{equation}
+Pri tome smo se poslužili jednadžbom za računanje logaritamske izglednosti (\ref{eq:log-likelihood}).
+Dobivenu logaritamsku izglednost zatim je potrebno uprosječiti na svih 30 realizacija prozora
+budućih povrata. To radimo kako bi zagladili moguće ekstremne vrijednosti u prozoru i olakšali
+učenje modela.
 Drugi dekoder računa procjene $\widehat{\boldsymbol{\mu}}$ i $\widehat{\boldsymbol{\Sigma}}^{-1}$
 primjenjujući formule (\ref{eq:ocekivanje-r}) i (\ref{eq:kovarijacijska-r}) na $\boldsymbol{\alpha}$,
 $\boldsymbol{\beta}$ i podatke iz skupa $\mathbf{Y}_k$. Kod računanja inverza
@@ -1032,13 +1041,14 @@ $\widehat{\boldsymbol{\Sigma}}^{-1}$ poslužili smo se Woodburyjevom lemom o inv
 Treća funckija gubitka je zapravo samo kombinacija srednje kvadratne pogreške i negativne logaritamske
 izglednosti te je računamo na idući način:
 \begin{equation}
-  \mathrm{COMBINED}\left(\widehat{\mathbf{Y}}_{Pk}, \mathbf{Y}_{Pk}, \widehat{\boldsymbol{\mu}},
-  \widehat{\boldsymbol{\Sigma}}^{-1}\right) = \mathrm{NLL}\left(\widehat{\boldsymbol{\mu}},
+  L_{MIX}\left(\widehat{\mathbf{Y}}_{Pk}, \mathbf{Y}_{Pk}, \widehat{\boldsymbol{\mu}},
+  \widehat{\boldsymbol{\Sigma}}^{-1}\right) = L_{NLL}\left(\widehat{\boldsymbol{\mu}},
   \widehat{\boldsymbol{\Sigma}}^{-1}, \mathbf{Y}_{Pk}\right) +
-  \zeta\times\mathrm{MSE}\left(\widehat{\mathbf{Y}}_{Pk}, \mathbf{Y}_{Pk}\right),
+  \zeta\times L_{MSE}\left(\widehat{\mathbf{Y}}_{Pk}, \mathbf{Y}_{Pk}\right),
 \end{equation}
-gdje koeficijent $\zeta$ određuje doprinos srednje kvadratne pogreške. Zbog tog je treći dekoder zapravo
-samo objedinjenje prvog i drugog dekodera u jedan veći dekoder.
+gdje koeficijent $\zeta$ određuje doprinos srednje kvadratne pogreške te nam služi kako bi doveli ta dva
+gubitka na isti red veličine. Zbog tog je treći dekoder zapravo samo objedinjenje prvog i drugog dekodera
+u jedan veći dekoder.
 
 \begin{figure}[htb]
 \centering
@@ -1065,10 +1075,13 @@ dobivene primjenom enkodera na tenzor $\mathbf{X}_k$, a $\mathbf{o}_{yk}$ izlaz 
 $\boldsymbol{\alpha}_k$ i $\boldsymbol{\beta}_k$ dobivene iz skupa $\mathbf{Y}_k$. Ukupan gubitak modela
 koji koristimo u postupku optimizacije za primjer $k$ tada računamo na sljedeći način:
 \begin{equation}
-  \mathrm{LOSS}_{TOTAL}\left(\mathbf{o}_{xk}, \mathbf{o}_{yk}, \mathbf{Y}_{Pk}\right) =
-  \mathrm{LOSS}\left(\mathbf{o}_{xk}, \mathbf{Y}_{Pk}\right) -
-  \mathrm{LOSS}\left(\mathbf{o}_{yk}, \mathbf{Y}_{Pk}\right)
+  \Delta L\left(\mathbf{o}_{xk}, \mathbf{o}_{yk}, \mathbf{Y}_{Pk}\right) =
+  L\left(\mathbf{o}_{xk}, \mathbf{Y}_{Pk}\right) -
+  L\left(\mathbf{o}_{yk}, \mathbf{Y}_{Pk}\right)
 \end{equation}
+Gubitak $\Delta L$ tad predstavlja gubitak našeg modela iznad gubitka metode najmanjih kvadrata
+primjenjene na prozor budućih povrata. Na taj način ne kažnjavamo model za inherentni šum
+i nepredvidivost podataka.
 Općenit oblik našeg modela tada možemo prikazati slikom \ref{fig:general-model}.
 
 \begin{figure}[htb]
@@ -1083,7 +1096,120 @@ Općenit oblik našeg modela tada možemo prikazati slikom \ref{fig:general-mode
 \chapter{Rezultati}
 \label{pog:rezultati}
 
-TODO Rezultati i rasprava
+Nakon što smo učitali i pripremili podatke kako je navedeno u potpoglavljima \ref{sec:podatci} i
+\ref{sec:obrada-podataka} generirali smo sintetički skup podataka s $N = 10000$ uzoraka i $p = 100$
+dionica kako je opisano u potpoglavlju \ref{sec:sinteticki}.
+
+Zatim smo proveli postupak optimizacije na našem modelu s različitim konfiguracijama. Ispitane
+su sve kombinacije hiperparametera prikazanih u tablici \ref{tbl:hiperparametri} osim kombinacija koje
+uključuju LSTM jedinicu s veličinom skrivenog stanja 16 i jednim slojem.
+\begin{table}[htb]
+\caption{Ispitani hiperparametri}
+\label{tbl:hiperparametri}
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{ll}
+  \toprule
+  \textbf{Hiperparametar} & \textbf{Ispitane vrijednosti} \\
+  \midrule
+  Skup za treniranje & Stvarni, Sintetički \\
+  Veličina skrivenog stanja & 16, 32 \\
+  Broj slojeva LSTM jedinice & 1, 2 \\
+  Stopa učenja & $10^{-3}$, $10^{-4}$, $10^{-5}$, $10^{-6}$ \\
+  Funkcija cilja & $\Delta L_{MSE}$, $\Delta L_{NLL}$, $\Delta L_{MIX}$ \\
+  \bottomrule
+\end{tabular}
+\end{table}
+Za algoritam gradijetnog spusta u postupku optimizacije odabrali smo Adam jer često pokazuje dobre rezultate
+\cite{du03}. Također smo koristili adaptivnu stopu učenja. Svaki put kad se u dvije uzastopne epohe
+pogreška na skupu za validaciju ne poboljša, stopa za učenje se prepolavlja. Modeli su trenirani sve
+dok se u deset uzastopnih epoha pogreška na skupu za validaciju ne poboljša.
+
+Ispitivanje performansi modela provedeno je računanjem gubitaka $\Delta L_{MSE}$ i $\Delta L_{NLL}$
+za sve dobivene modele na skupu za testiranje stvarnog skupa podataka neovisno o tome jeli model
+treniran na stvarnom ili sintetičkom skupu podataka. Prilikom ispitivanja korišteni su parametri
+modela koji su ostvarili najmanju pogrešku na skupu za validaciju, a ne parametri dobiveni
+na samom kraju treniranja.
+
+Osim što smo ispitali gotove sve kombinacije hiperparametara iz tablice \ref{tbl:hiperparametri},
+ispitali smo i koncept zagrijavanja modela. Nakon što istreniramo model na sintetičkom skupu podatka,
+model možemo nastaviti trenirati na stvarnom skupu podataka. Ideja ovog pristupa je da generiranjem
+velikog sintetičkog skupa podataka možemo povećati skup za treniranje i dovesti model do povoljnog
+skupa parametara prije nego što krenemo s treniranjem na stvarnom skupu podataka. Nadamo se da će model
+na taj način imati veće šanse pronaći bolja rješenja nego model koji kreće od nasumično inicijaliziranog
+skupa parametara.
+
+Pokazalo se da na sintetičkom skupu podataka najmanje gubitke $\Delta L_{MSE}$ i $\Delta L_{NLL}$
+postiže model s $\Delta L_{MIX}$ funckijom cilja. Stoga smo, prilikom ispitivanja modela s zagrijavanjem,
+korisitli parametre dobivene treniranjem modela s $\Delta L_{MIX}$ funckijom cilja na sintetičkom skupu
+podataka. Zatim smo nastvaili treniranje modela koristeći pri tome sve kombinacije hiperparametera
+prikazanih u tablici \ref{tbl:hiperparametri} osim kombinacija koje uključuju LSTM jedinicu s veličinom
+skrivenog stanja 16 i jednim slojem te kombinacija koje uključuju sintetički skup za treniranje.
+
+Potom smo ispitali performanse modela sa zagrijavanjem i metode najmanjih kvadrata (OLS) na isti način kao
+za prethodno spomenute modele. Metoda najmanjih kvadrata na povjesnom prozoru podataka će nam služiti za
+usporedbu performansi modela i jedne od standardnih metoda estimacije.
+
+Dobiveni rezulrati prikazani su u tablici \ref{tbl:rezultati}. U tablici je također naveden $\Delta L_{MIX}$
+gubitak s koeficijentom $\zeta = 10^5$ radi lakše usporedbe ukupnih performansi.
+
+\begin{table}[htb]
+\caption{Rezultati ispitivanja na skupu za testiranje}
+\label{tbl:rezultati}
+\centering
+\begin{tabular}{l ccc ccc ccc}
+\toprule
+& \multicolumn{9}{c}{Test} \\
+\cmidrule(lr){2-10}
+& \multicolumn{3}{c}{$\Delta L_{MSE}\ (10^{-5})$} 
+& \multicolumn{3}{c}{$\Delta L_{NLL}$} 
+& \multicolumn{3}{c}{$\Delta L_{MIX}\ (\zeta = 10^5)$} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10}
+& $L_{MSE}$ & $L_{NLL}$ & $L_{MIX}$ & $L_{MSE}$ & $L_{NLL}$ & $L_{MIX}$ & $L_{MSE}$ & $L_{NLL}$ & $L_{MIX}$ \\
+& \multicolumn{9}{c}{} \\
+Sintetički   & 2.230 & 1.966 & \textbf{1.877} & 2.238 & 2.219 & \textbf{2.209} & 4.468 & 4.185 & \textbf{4.086} \\
+Stvarni      & 2.127 & \textbf{1.804} & 1.836 & 2.227 & \textbf{2.203} & 2.208 & 4.354 & \textbf{4.007} & 4.044 \\
+Zagrijavanje & 1.245 & 2.599 & \textbf{1.052} & 1.443 & \textbf{1.244} & 1.284 & 2.687 & 3.843 & \textbf{2.336} \\
+& \multicolumn{9}{c}{} \\
+OLS          & \multicolumn{3}{c}{1.182} & \multicolumn{3}{c}{1.536} & \multicolumn{3}{c}{2.718} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{img/train_val_loss.pdf}
+\caption{Gubitak najboljeg modela na skupu za treniranje i validaciju}
+\label{fig:best-model-train-val}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{img/train_val_loss_mse_nll_models.pdf}
+\caption{Gubitak najboljeg MSE i NLL modela na skupu za treniranje i validaciju}
+\label{fig:mse-nll-model-train-val}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{img/model_ols_alpha_est.pdf}
+\caption{Procjene koeficijenta $\alpha$}
+\label{fig:alpha-estimation}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{img/model_ols_beta_est.pdf}
+\caption{Procjene koeficijenta $\beta$}
+\label{fig:beta-estimation}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{img/model_ols_reconstructions.png}
+\caption{Rekonstrukcije povrata}
+\label{fig:rekonstrukcije-povrata}
+\end{figure}
 
 
 %--- ZAKLJUČAK / CONCLUSION ----------------------------------------------------
@@ -1091,6 +1217,11 @@ TODO Rezultati i rasprava
 \label{pog:zakljucak}
 
 TODO Zaključak
+
+Modeli dubokog učenja mogu konkurirati i nekad čak nadmašiti metodu
+najmanjih kvadrata što pokazuje da modeli uspješno modeliraju zavisnosti
+u povratima. Bitnije otkriće je da modeli zagrijani na sintetičkim
+podatcima bolje generaliziraju i pronalaze bolja rješenja.  
 
 
 %--- LITERATURA / REFERENCES ---------------------------------------------------
@@ -1105,23 +1236,44 @@ TODO Zaključak
 
 % Sažetak na hrvatskom
 \begin{sazetak}
-  Unesite sažetak na hrvatskom.
+  U ovom radu ispituje se može li model dubokog učenja uspješno procijeniti koeficijente jednofaktorskog
+  modela povrata iz prozora povijesnih podataka, i to bolje nego što to čini standardna metoda najmanjih
+  kvadrata primijenjena na istom prozoru. Model se temelji na LSTM arhitekturi koja iz vremenskih nizova
+  povrata i tržišnog faktora procjenjuje koeficijente $\alpha$ i $\beta$ koji najbolje odgovaraju
+  budućim povratima. Kako bi se prevladao problem ograničene količine stvarnih podataka
+  za treniranje, generiran je sintetički skup podataka koji replicira statistička svojstva stvarnih
+  financijskih povrata. Modeli su trenirani na stvarnim i sintetičkim podatcima, a ispitan je i pristup
+  zagrijavanja modela, treniranje na sintetičkim podatcima prije nastavka treniranja na stvarnim.
+  Rezultati pokazuju da modeli dubokog učenja mogu konkurirati metodi najmanjih kvadrata i ponekad je
+  nadmašiti, što potvrđuje da modeli uspješno modeliraju zavisnosti u povratima. Ključni nalaz je da
+  modeli zagrijani na sintetičkim podatcima bolje generaliziraju i pronalaze bolja rješenja od modela
+  treniranih isključivo na stvarnim podatcima.
 
 \end{sazetak}
 
 \begin{kljucnerijeci}
-  prva ključna riječ; druga ključna riječ; treća ključna riječ
+  duboko učenje; LSTM; financijski vremenski nizovi; faktorski modeli; sintetički podatci; metoda najmanjih kvadrata
 \end{kljucnerijeci}
 
 
 % Abstract in English
 \begin{abstract}
-  Enter the abstract in English.
+  This thesis investigates whether a deep learning model can successfully estimate the coefficients of
+  a single-factor return model from a historical data window, outperforming ordinary least squares (OLS)
+  applied to the same window. The model is based on an LSTM architecture that estimates the coefficients
+  $\alpha$ and $\beta$, that best fit future returns, from a historic time series of equity returns
+  and a market factor. To overcome the limited amount of real training data, a synthetic dataset
+  was generated to replicate the statistical properties of real financial returns. Models were
+  trained on both real and synthetic data, and a warmup approach was also evaluated, pre-training on
+  synthetic data before continuing training on real data. The results show that deep learning models can
+  compete with OLS and sometimes surpass it, confirming that the models successfully capture dependencies
+  in asset returns. The key finding is that models pre-trained on synthetic data generalize better and find
+  superior solutions compared to models trained exclusively on real data.
 
 \end{abstract}
 
 \begin{keywords}
-  the first keyword; the second keyword; the third keyword
+  deep learning; LSTM; financial time series; factor models; synthetic data; ordinary least squares
 \end{keywords}
 
 
